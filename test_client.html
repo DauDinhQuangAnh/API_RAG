@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="vi">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>RAG API Test Client</title>
+    <style>
+        :root {
+            color-scheme: light;
+            --bg: #0f172a;
+            --card: #111827;
+            --text: #e5e7eb;
+            --muted: #9ca3af;
+            --accent: #22c55e;
+            --danger: #ef4444;
+            --border: #1f2937;
+        }
+
+        body {
+            margin: 0;
+            font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu,
+                Cantarell, "Noto Sans", "Helvetica Neue", Arial, "Apple Color Emoji",
+                "Segoe UI Emoji";
+            background: linear-gradient(135deg, #0b1020, #111827 60%);
+            color: var(--text);
+        }
+
+        header {
+            padding: 24px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        h1 {
+            margin: 0 0 6px 0;
+            font-size: 22px;
+        }
+
+        .container {
+            max-width: 980px;
+            margin: 0 auto;
+            padding: 24px;
+            display: grid;
+            gap: 16px;
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        .row {
+            display: grid;
+            gap: 12px;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        }
+
+        label {
+            display: block;
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 6px;
+        }
+
+        input,
+        select,
+        textarea,
+        button {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: #0b1220;
+            color: var(--text);
+            font-size: 14px;
+        }
+
+        textarea {
+            min-height: 90px;
+            resize: vertical;
+        }
+
+        button {
+            cursor: pointer;
+            background: #16a34a;
+            border: 1px solid #166534;
+            font-weight: 600;
+        }
+
+        pre {
+            white-space: pre-wrap;
+            word-break: break-word;
+            background: #0b1220;
+            border: 1px solid var(--border);
+            padding: 12px;
+            border-radius: 8px;
+            margin: 8px 0 0 0;
+            font-size: 12px;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>RAG API Test Client</h1>
+        <div class="status">Test nhanh các endpoint trong <code>API_RAG_NEW/main.py</code></div>
+    </header>
+    <div class="container">
+        <div class="card">
+            <div class="row">
+                <div>
+                    <label>Base URL</label>
+                    <input id="baseUrl" value="http://127.0.0.1:8000" />
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>/health</h3>
+            <button id="btnHealth">Check Health</button>
+            <pre id="outHealth"></pre>
+        </div>
+
+        <div class="card">
+            <h3>/collections</h3>
+            <button id="btnCollections">List Collections</button>
+            <pre id="outCollections"></pre>
+        </div>
+
+        <div class="card">
+            <h3>CRUD Collections</h3>
+            <div class="row">
+                <div>
+                    <label>New collection name</label>
+                    <input id="cNewName" placeholder="rag_collection_demo" />
+                </div>
+                <div>
+                    <label>Description (create)</label>
+                    <input id="cDescription" placeholder="A collection for demo" />
+                </div>
+            </div>
+            <button id="btnCreateCollection">POST /collections</button>
+            <pre id="outCreateCollection"></pre>
+
+            <hr style="margin:16px 0;border-color:var(--border);" />
+
+            <div class="row">
+                <div>
+                    <label>collection_name (for GET/PATCH/DELETE)</label>
+                    <input id="cName" placeholder="rag_collection_demo" />
+                </div>
+                <div>
+                    <label>PATCH new_name (optional)</label>
+                    <input id="cPatchNewName" placeholder="rag_collection_new" />
+                </div>
+            </div>
+            <label>PATCH metadata (JSON, optional)</label>
+            <textarea id="cPatchMetadata" placeholder='{"description": "Updated description"}'></textarea>
+            <div class="row">
+                <button id="btnGetCollection">GET /collections/{name}</button>
+                <button id="btnPatchCollection">PATCH /collections/{name}</button>
+                <button id="btnDeleteCollection" style="background: var(--danger); border-color: #b91c1c;">
+                    DELETE /collections/{name}
+                </button>
+            </div>
+            <pre id="outCrudCollection"></pre>
+        </div>
+
+        <div class="card">
+            <h3>/ingest (CSV)</h3>
+            <div class="row">
+                <div>
+                    <label>CSV File</label>
+                    <input id="csvFile" type="file" accept=".csv" />
+                </div>
+                <div>
+                    <label>index_column</label>
+                    <input id="indexColumn" placeholder="content" />
+                </div>
+                <div>
+                    <label>collection_name (optional)</label>
+                    <input id="collectionName" placeholder="rag_collection_demo" />
+                </div>
+            </div>
+            <button id="btnIngest">Upload & Ingest</button>
+            <pre id="outIngest"></pre>
+        </div>
+
+        <div class="card">
+            <h3>/collections/{collection_name}/query</h3>
+            <div class="row">
+                <div>
+                    <label>collection_name</label>
+                    <input id="qCollection" placeholder="rag_collection_demo" />
+                </div>
+                <div>
+                    <label>number_docs_retrieval</label>
+                    <input id="numDocs" type="number" value="3" min="1" max="50" />
+                </div>
+            </div>
+            <label>columns_to_answer (comma-separated)</label>
+            <input id="columnsToAnswer" placeholder="title,price,description" />
+            <label>query</label>
+            <textarea id="queryText" placeholder="Nhập câu hỏi..."></textarea>
+            <button id="btnQuery">Query</button>
+            <pre id="outQuery"></pre>
+        </div>
+    </div>
+
+    <script>
+        const baseUrlEl = document.getElementById("baseUrl");
+
+        function apiUrl(path) {
+            return `${baseUrlEl.value.replace(/\/$/, "")}${path}`;
+        }
+
+        async function handleFetch(outputEl, fn) {
+            outputEl.textContent = "Loading...";
+            try {
+                const data = await fn();
+                outputEl.textContent = JSON.stringify(data, null, 2);
+            } catch (err) {
+                outputEl.textContent = `Error: ${err.message}`;
+            }
+        }
+
+        document.getElementById("btnHealth").onclick = () => {
+            handleFetch(document.getElementById("outHealth"), async () => {
+                const res = await fetch(apiUrl("/health"));
+                return await res.json();
+            });
+        };
+
+        document.getElementById("btnCollections").onclick = () => {
+            handleFetch(document.getElementById("outCollections"), async () => {
+                const res = await fetch(apiUrl("/collections"));
+                return await res.json();
+            });
+        };
+
+        document.getElementById("btnCreateCollection").onclick = () => {
+            handleFetch(document.getElementById("outCreateCollection"), async () => {
+                const name = document.getElementById("cNewName").value.trim();
+                const description = document.getElementById("cDescription").value.trim();
+                if (!name) throw new Error("name is required.");
+                const body = {
+                    name,
+                    description: description || null,
+                };
+                const res = await fetch(apiUrl("/collections"), {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body),
+                });
+                if (!res.ok) {
+                    throw new Error(await res.text());
+                }
+                return await res.json();
+            });
+        };
+
+        document.getElementById("btnGetCollection").onclick = () => {
+            handleFetch(document.getElementById("outCrudCollection"), async () => {
+                const name = document.getElementById("cName").value.trim();
+                if (!name) throw new Error("collection_name is required.");
+                const res = await fetch(apiUrl(`/collections/${encodeURIComponent(name)}`));
+                if (!res.ok) {
+                    throw new Error(await res.text());
+                }
+                return await res.json();
+            });
+        };
+
+        document.getElementById("btnPatchCollection").onclick = () => {
+            handleFetch(document.getElementById("outCrudCollection"), async () => {
+                const name = document.getElementById("cName").value.trim();
+                const newName = document.getElementById("cPatchNewName").value.trim();
+                const metadataRaw = document.getElementById("cPatchMetadata").value.trim();
+                if (!name) throw new Error("collection_name is required.");
+
+                const body = {};
+                if (newName) body.new_name = newName;
+                if (metadataRaw) {
+                    try {
+                        body.metadata = JSON.parse(metadataRaw);
+                    } catch (e) {
+                        throw new Error("metadata phải là JSON hợp lệ.");
+                    }
+                }
+                if (!body.new_name && !body.metadata) {
+                    throw new Error("new_name hoặc metadata phải được cung cấp.");
+                }
+
+                const res = await fetch(apiUrl(`/collections/${encodeURIComponent(name)}`), {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body),
+                });
+                if (!res.ok) {
+                    throw new Error(await res.text());
+                }
+                return await res.json();
+            });
+        };
+
+        document.getElementById("btnDeleteCollection").onclick = () => {
+            handleFetch(document.getElementById("outCrudCollection"), async () => {
+                const name = document.getElementById("cName").value.trim();
+                if (!name) throw new Error("collection_name is required.");
+                const res = await fetch(apiUrl(`/collections/${encodeURIComponent(name)}`), {
+                    method: "DELETE",
+                });
+                if (!res.ok) {
+                    throw new Error(await res.text());
+                }
+                return await res.json();
+            });
+        };
+
+        document.getElementById("btnIngest").onclick = () => {
+            handleFetch(document.getElementById("outIngest"), async () => {
+                const file = document.getElementById("csvFile").files[0];
+                const indexColumn = document.getElementById("indexColumn").value.trim();
+                const collectionName = document.getElementById("collectionName").value.trim();
+                if (!file) throw new Error("Please select a CSV file.");
+                if (!indexColumn) throw new Error("index_column is required.");
+
+                const form = new FormData();
+                form.append("file", file);
+                form.append("index_column", indexColumn);
+                if (collectionName) form.append("collection_name", collectionName);
+
+                const res = await fetch(apiUrl("/ingest"), { method: "POST", body: form });
+                if (!res.ok) {
+                    throw new Error(await res.text());
+                }
+                return await res.json();
+            });
+        };
+
+        document.getElementById("btnQuery").onclick = () => {
+            handleFetch(document.getElementById("outQuery"), async () => {
+                const collection = document.getElementById("qCollection").value.trim();
+                const numDocs = parseInt(document.getElementById("numDocs").value, 10);
+                const columnsRaw = document.getElementById("columnsToAnswer").value.trim();
+                const query = document.getElementById("queryText").value.trim();
+
+                if (!collection) throw new Error("collection_name is required.");
+                if (!query) throw new Error("query is required.");
+                if (!columnsRaw) throw new Error("columns_to_answer is required.");
+
+                const body = {
+                    query,
+                    columns_to_answer: columnsRaw.split(",").map((s) => s.trim()).filter(Boolean),
+                    number_docs_retrieval: numDocs,
+                };
+
+                const res = await fetch(apiUrl(`/collections/${encodeURIComponent(collection)}/query`), {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body),
+                });
+                if (!res.ok) {
+                    throw new Error(await res.text());
+                }
+                return await res.json();
+            });
+        };
+    </script>
+</body>
+
+</html>
