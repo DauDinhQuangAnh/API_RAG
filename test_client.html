@@ -4,207 +4,566 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>RAG API Test Client</title>
+    <title>RAG API Test Client - WeaveCarbon</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         :root {
-            color-scheme: light;
-            --bg: #0f172a;
-            --card: #111827;
-            --text: #e5e7eb;
-            --muted: #9ca3af;
-            --accent: #22c55e;
+            --primary: #10b981;
+            --primary-dark: #059669;
+            --secondary: #3b82f6;
             --danger: #ef4444;
-            --border: #1f2937;
+            --warning: #f59e0b;
+            --bg-dark: #0f172a;
+            --bg-card: #1e293b;
+            --bg-input: #0f1729;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --border: #334155;
+            --shadow: rgba(0, 0, 0, 0.3);
         }
 
         body {
-            margin: 0;
-            font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Ubuntu,
-                Cantarell, "Noto Sans", "Helvetica Neue", Arial, "Apple Color Emoji",
-                "Segoe UI Emoji";
-            background: linear-gradient(135deg, #0b1020, #111827 60%);
-            color: var(--text);
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+            color: var(--text-primary);
+            min-height: 100vh;
         }
 
         header {
-            padding: 24px;
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 20px 0;
             border-bottom: 1px solid var(--border);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 4px 6px var(--shadow);
+        }
+
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            font-size: 20px;
         }
 
         h1 {
-            margin: 0 0 6px 0;
-            font-size: 22px;
+            font-size: 24px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .status-badge {
+            padding: 6px 12px;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid var(--primary);
+            border-radius: 20px;
+            font-size: 12px;
+            color: var(--primary);
+            font-weight: 500;
         }
 
         .container {
-            max-width: 980px;
+            max-width: 1200px;
             margin: 0 auto;
-            padding: 24px;
+            padding: 32px 24px;
+        }
+
+        .grid {
             display: grid;
-            gap: 16px;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 24px;
         }
 
         .card {
-            background: var(--card);
+            background: var(--bg-card);
             border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 16px;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 6px var(--shadow);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 12px var(--shadow);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .card-icon {
+            width: 36px;
+            height: 36px;
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
+
+        h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--text-primary);
+            flex: 1;
+        }
+
+        .method-badge {
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .method-get {
+            background: rgba(59, 130, 246, 0.2);
+            color: #60a5fa;
+        }
+
+        .method-post {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--primary);
+        }
+
+        .method-patch {
+            background: rgba(245, 158, 11, 0.2);
+            color: var(--warning);
+        }
+
+        .method-delete {
+            background: rgba(239, 68, 68, 0.2);
+            color: var(--danger);
+        }
+
+        .form-group {
+            margin-bottom: 16px;
         }
 
         .row {
             display: grid;
-            gap: 12px;
-            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
         }
 
         label {
             display: block;
-            font-size: 12px;
-            color: var(--muted);
-            margin-bottom: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
         }
 
         input,
         select,
-        textarea,
-        button {
+        textarea {
             width: 100%;
-            padding: 10px 12px;
-            border-radius: 8px;
+            padding: 12px 14px;
+            border-radius: 10px;
             border: 1px solid var(--border);
-            background: #0b1220;
-            color: var(--text);
+            background: var(--bg-input);
+            color: var(--text-primary);
             font-size: 14px;
+            font-family: 'Inter', sans-serif;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        input:focus,
+        select:focus,
+        textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.1);
         }
 
         textarea {
-            min-height: 90px;
+            min-height: 100px;
             resize: vertical;
+            font-family: 'Courier New', monospace;
         }
 
         button {
-            cursor: pointer;
-            background: #16a34a;
-            border: 1px solid #166534;
+            width: 100%;
+            padding: 12px 20px;
+            border-radius: 10px;
+            border: none;
+            font-size: 14px;
             font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 16px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, var(--danger), #dc2626);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+        }
+
+        .btn-secondary {
+            background: rgba(59, 130, 246, 0.2);
+            color: var(--secondary);
+            border: 1px solid var(--secondary);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(59, 130, 246, 0.3);
+        }
+
+        button:active {
+            transform: scale(0.98);
         }
 
         pre {
             white-space: pre-wrap;
             word-break: break-word;
-            background: #0b1220;
+            background: var(--bg-input);
             border: 1px solid var(--border);
-            padding: 12px;
-            border-radius: 8px;
-            margin: 8px 0 0 0;
+            padding: 16px;
+            border-radius: 10px;
+            margin-top: 16px;
             font-size: 12px;
+            font-family: 'Courier New', monospace;
+            max-height: 400px;
+            overflow-y: auto;
+            line-height: 1.6;
+        }
+
+        pre::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        pre::-webkit-scrollbar-track {
+            background: var(--bg-card);
+            border-radius: 3px;
+        }
+
+        pre::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
+        }
+
+        .divider {
+            margin: 24px 0;
+            border: none;
+            border-top: 1px solid var(--border);
+        }
+
+        .full-width {
+            grid-column: 1 / -1;
+        }
+
+        .loading {
+            color: var(--warning);
+        }
+
+        .success {
+            color: var(--primary);
+        }
+
+        .error {
+            color: var(--danger);
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+
+            .row {
+                grid-template-columns: 1fr;
+            }
+
+            h1 {
+                font-size: 20px;
+            }
         }
     </style>
 </head>
 
 <body>
     <header>
-        <h1>RAG API Test Client</h1>
-        <div class="status">Test nhanh các endpoint trong <code>API_RAG_NEW/main.py</code></div>
-    </header>
-    <div class="container">
-        <div class="card">
-            <div class="row">
+        <div class="header-content">
+            <div class="logo">
+                <div class="logo-icon">🌿</div>
                 <div>
-                    <label>Base URL</label>
-                    <input id="baseUrl" value="http://127.0.0.1:8000" />
+                    <h1>WeaveCarbon RAG API</h1>
+                    <div style="font-size: 13px; color: var(--text-secondary); margin-top: 4px;">Test Client Interface</div>
                 </div>
+            </div>
+            <div class="status-badge">● API Ready</div>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Config Section -->
+        <div class="card full-width">
+            <div class="card-header">
+                <div class="card-icon">⚙️</div>
+                <h3>Configuration</h3>
+            </div>
+            <div class="form-group">
+                <label>Base URL</label>
+                <input id="baseUrl" value="http://127.0.0.1:8000" placeholder="http://127.0.0.1:8000" />
             </div>
         </div>
 
-        <div class="card">
-            <h3>/health</h3>
-            <button id="btnHealth">Check Health</button>
-            <pre id="outHealth"></pre>
+        <div class="grid">
+            <!-- Health Check -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon">💚</div>
+                    <h3>Health Check</h3>
+                    <span class="method-badge method-get">GET</span>
+                </div>
+                <div style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">
+                    📍 <code>/health</code>
+                </div>
+                <button class="btn-primary" id="btnHealth">
+                    <span>▶</span> Check Health
+                </button>
+                <pre id="outHealth"></pre>
+            </div>
+
+            <!-- Database Test -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon">🗄️</div>
+                    <h3>Database Test</h3>
+                    <span class="method-badge method-get">GET</span>
+                </div>
+                <div style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">
+                    📍 <code>/db/test</code>
+                </div>
+                <button class="btn-primary" id="btnDbTest">
+                    <span>▶</span> Test PostgreSQL
+                </button>
+                <pre id="outDbTest"></pre>
+            </div>
+
+            <!-- List Collections -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon">📚</div>
+                    <h3>List Collections</h3>
+                    <span class="method-badge method-get">GET</span>
+                </div>
+                <div style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">
+                    📍 <code>/collections</code>
+                </div>
+                <button class="btn-primary" id="btnCollections">
+                    <span>▶</span> Get All Collections
+                </button>
+                <pre id="outCollections"></pre>
+            </div>
+
+            <!-- Chat Gemini -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon">🤖</div>
+                    <h3>Chat Gemini</h3>
+                    <span class="method-badge method-post">POST</span>
+                </div>
+                <div style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">
+                    📍 <code>/chat/gemini</code>
+                </div>
+                <div class="form-group">
+                    <label>Query</label>
+                    <textarea id="geminiQuery" placeholder="Carbon footprint là gì?"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>API Key (optional)</label>
+                    <input id="geminiApiKey" type="password" placeholder="Leave empty to use .env" />
+                </div>
+                <button class="btn-primary" id="btnChatGemini">
+                    <span>▶</span> Send to Gemini
+                </button>
+                <pre id="outChatGemini"></pre>
+            </div>
         </div>
 
-        <div class="card">
-            <h3>/collections</h3>
-            <button id="btnCollections">List Collections</button>
-            <pre id="outCollections"></pre>
-        </div>
-
-        <div class="card">
-            <h3>CRUD Collections</h3>
+        <!-- Create Collection -->
+        <div class="card full-width">
+            <div class="card-header">
+                <div class="card-icon">➕</div>
+                <h3>Create Collection</h3>
+                <span class="method-badge method-post">POST</span>
+            </div>
+            <div style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">
+                📍 <code>/collections</code>
+            </div>
             <div class="row">
-                <div>
-                    <label>New collection name</label>
+                <div class="form-group">
+                    <label>Collection Name</label>
                     <input id="cNewName" placeholder="rag_collection_demo" />
                 </div>
-                <div>
-                    <label>Description (create)</label>
-                    <input id="cDescription" placeholder="A collection for demo" />
+                <div class="form-group">
+                    <label>Description</label>
+                    <input id="cDescription" placeholder="A demo collection for testing" />
                 </div>
             </div>
-            <button id="btnCreateCollection">POST /collections</button>
+            <button class="btn-primary" id="btnCreateCollection">
+                <span>▶</span> Create Collection
+            </button>
             <pre id="outCreateCollection"></pre>
+        </div>
 
-            <hr style="margin:16px 0;border-color:var(--border);" />
-
+        <!-- CRUD Operations -->
+        <div class="card full-width">
+            <div class="card-header">
+                <div class="card-icon">🔧</div>
+                <h3>Collection Operations</h3>
+            </div>
             <div class="row">
-                <div>
-                    <label>collection_name (for GET/PATCH/DELETE)</label>
+                <div class="form-group">
+                    <label>Collection Name (for operations)</label>
                     <input id="cName" placeholder="rag_collection_demo" />
                 </div>
-                <div>
-                    <label>PATCH new_name (optional)</label>
+            </div>
+            
+            <div class="divider"></div>
+            
+            <div class="row">
+                <div class="form-group">
+                    <label>New Name (for PATCH)</label>
                     <input id="cPatchNewName" placeholder="rag_collection_new" />
                 </div>
+                <div class="form-group">
+                    <label>Metadata JSON (for PATCH)</label>
+                    <textarea id="cPatchMetadata" placeholder='{"description": "Updated"}'></textarea>
+                </div>
             </div>
-            <label>PATCH metadata (JSON, optional)</label>
-            <textarea id="cPatchMetadata" placeholder='{"description": "Updated description"}'></textarea>
+            
             <div class="row">
-                <button id="btnGetCollection">GET /collections/{name}</button>
-                <button id="btnPatchCollection">PATCH /collections/{name}</button>
-                <button id="btnDeleteCollection" style="background: var(--danger); border-color: #b91c1c;">
-                    DELETE /collections/{name}
+                <button class="btn-secondary" id="btnGetCollection">
+                    <span>📖</span> GET Collection Info
+                </button>
+                <button class="btn-secondary" id="btnPatchCollection">
+                    <span>✏️</span> PATCH Collection
+                </button>
+                <button class="btn-danger" id="btnDeleteCollection">
+                    <span>🗑️</span> DELETE Collection
                 </button>
             </div>
             <pre id="outCrudCollection"></pre>
         </div>
 
-        <div class="card">
-            <h3>/ingest (CSV)</h3>
+        <!-- Ingest CSV -->
+        <div class="card full-width">
+            <div class="card-header">
+                <div class="card-icon">📤</div>
+                <h3>Ingest CSV Data</h3>
+                <span class="method-badge method-post">POST</span>
+            </div>
+            <div style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">
+                📍 <code>/ingest</code>
+            </div>
             <div class="row">
-                <div>
+                <div class="form-group">
                     <label>CSV File</label>
                     <input id="csvFile" type="file" accept=".csv" />
                 </div>
-                <div>
-                    <label>index_column</label>
+                <div class="form-group">
+                    <label>Index Column</label>
                     <input id="indexColumn" placeholder="content" />
                 </div>
-                <div>
-                    <label>collection_name (optional)</label>
+                <div class="form-group">
+                    <label>Collection Name (optional)</label>
                     <input id="collectionName" placeholder="rag_collection_demo" />
                 </div>
             </div>
-            <button id="btnIngest">Upload & Ingest</button>
+            <button class="btn-primary" id="btnIngest">
+                <span>▶</span> Upload & Process
+            </button>
             <pre id="outIngest"></pre>
         </div>
 
-        <div class="card">
-            <h3>/collections/{collection_name}/query</h3>
+        <!-- Query RAG -->
+        <div class="card full-width">
+            <div class="card-header">
+                <div class="card-icon">🔍</div>
+                <h3>Query RAG System</h3>
+                <span class="method-badge method-post">POST</span>
+            </div>
+            <div style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">
+                📍 <code>/collections/{collection_name}/query</code>
+            </div>
             <div class="row">
-                <div>
-                    <label>collection_name</label>
+                <div class="form-group">
+                    <label>Collection Name</label>
                     <input id="qCollection" placeholder="rag_collection_demo" />
                 </div>
-                <div>
-                    <label>number_docs_retrieval</label>
+                <div class="form-group">
+                    <label>Number of Documents</label>
                     <input id="numDocs" type="number" value="3" min="1" max="50" />
                 </div>
+                <div class="form-group">
+                    <label>Columns to Answer (comma-separated)</label>
+                    <input id="columnsToAnswer" placeholder="content, title, description" />
+                </div>
             </div>
-            <label>columns_to_answer (comma-separated)</label>
-            <input id="columnsToAnswer" placeholder="title,price,description" />
-            <label>query</label>
-            <textarea id="queryText" placeholder="Nhập câu hỏi..."></textarea>
-            <button id="btnQuery">Query</button>
+            <div class="form-group">
+                <label>Query</label>
+                <textarea id="queryText" placeholder="Nhập câu hỏi của bạn..."></textarea>
+            </div>
+            <button class="btn-primary" id="btnQuery">
+                <span>▶</span> Execute Query
+            </button>
             <pre id="outQuery"></pre>
         </div>
     </div>
@@ -217,68 +576,105 @@
         }
 
         async function handleFetch(outputEl, fn) {
-            outputEl.textContent = "Loading...";
+            outputEl.textContent = "⏳ Loading...";
+            outputEl.className = "loading";
             try {
                 const data = await fn();
                 outputEl.textContent = JSON.stringify(data, null, 2);
+                outputEl.className = "success";
             } catch (err) {
-                outputEl.textContent = `Error: ${err.message}`;
+                outputEl.textContent = `❌ Error: ${err.message}`;
+                outputEl.className = "error";
             }
         }
 
+        // Health Check
         document.getElementById("btnHealth").onclick = () => {
             handleFetch(document.getElementById("outHealth"), async () => {
                 const res = await fetch(apiUrl("/health"));
+                if (!res.ok) throw new Error(await res.text());
                 return await res.json();
             });
         };
 
+        // Database Test
+        document.getElementById("btnDbTest").onclick = () => {
+            handleFetch(document.getElementById("outDbTest"), async () => {
+                const res = await fetch(apiUrl("/db/test"));
+                if (!res.ok) throw new Error(await res.text());
+                return await res.json();
+            });
+        };
+
+        // List Collections
         document.getElementById("btnCollections").onclick = () => {
             handleFetch(document.getElementById("outCollections"), async () => {
                 const res = await fetch(apiUrl("/collections"));
+                if (!res.ok) throw new Error(await res.text());
                 return await res.json();
             });
         };
 
+        // Chat Gemini
+        document.getElementById("btnChatGemini").onclick = () => {
+            handleFetch(document.getElementById("outChatGemini"), async () => {
+                const query = document.getElementById("geminiQuery").value.trim();
+                const apiKey = document.getElementById("geminiApiKey").value.trim();
+                if (!query) throw new Error("Query is required.");
+                
+                const body = { query };
+                if (apiKey) body.api_key = apiKey;
+                
+                const res = await fetch(apiUrl("/chat/gemini"), {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body),
+                });
+                if (!res.ok) throw new Error(await res.text());
+                return await res.json();
+            });
+        };
+
+        // Create Collection
         document.getElementById("btnCreateCollection").onclick = () => {
             handleFetch(document.getElementById("outCreateCollection"), async () => {
                 const name = document.getElementById("cNewName").value.trim();
                 const description = document.getElementById("cDescription").value.trim();
-                if (!name) throw new Error("name is required.");
-                const body = {
-                    name,
-                    description: description || null,
-                };
+                if (!name) throw new Error("Collection name is required.");
+                
+                const body = { name };
+                if (description) body.description = description;
+                
                 const res = await fetch(apiUrl("/collections"), {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(body),
                 });
-                if (!res.ok) {
-                    throw new Error(await res.text());
-                }
+                if (!res.ok) throw new Error(await res.text());
                 return await res.json();
             });
         };
 
+        // Get Collection
         document.getElementById("btnGetCollection").onclick = () => {
             handleFetch(document.getElementById("outCrudCollection"), async () => {
                 const name = document.getElementById("cName").value.trim();
-                if (!name) throw new Error("collection_name is required.");
+                if (!name) throw new Error("Collection name is required.");
+                
                 const res = await fetch(apiUrl(`/collections/${encodeURIComponent(name)}`));
-                if (!res.ok) {
-                    throw new Error(await res.text());
-                }
+                if (!res.ok) throw new Error(await res.text());
                 return await res.json();
             });
         };
 
+        // Patch Collection
         document.getElementById("btnPatchCollection").onclick = () => {
             handleFetch(document.getElementById("outCrudCollection"), async () => {
                 const name = document.getElementById("cName").value.trim();
                 const newName = document.getElementById("cPatchNewName").value.trim();
                 const metadataRaw = document.getElementById("cPatchMetadata").value.trim();
-                if (!name) throw new Error("collection_name is required.");
+                
+                if (!name) throw new Error("Collection name is required.");
 
                 const body = {};
                 if (newName) body.new_name = newName;
@@ -286,11 +682,11 @@
                     try {
                         body.metadata = JSON.parse(metadataRaw);
                     } catch (e) {
-                        throw new Error("metadata phải là JSON hợp lệ.");
+                        throw new Error("Metadata must be valid JSON.");
                     }
                 }
                 if (!body.new_name && !body.metadata) {
-                    throw new Error("new_name hoặc metadata phải được cung cấp.");
+                    throw new Error("Either new_name or metadata must be provided.");
                 }
 
                 const res = await fetch(apiUrl(`/collections/${encodeURIComponent(name)}`), {
@@ -298,48 +694,56 @@
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(body),
                 });
-                if (!res.ok) {
-                    throw new Error(await res.text());
-                }
+                if (!res.ok) throw new Error(await res.text());
                 return await res.json();
             });
         };
 
+        // Delete Collection
         document.getElementById("btnDeleteCollection").onclick = () => {
+            const name = document.getElementById("cName").value.trim();
+            if (!name) {
+                alert("Collection name is required.");
+                return;
+            }
+            if (!confirm(`Are you sure you want to delete collection "${name}"?`)) {
+                return;
+            }
+            
             handleFetch(document.getElementById("outCrudCollection"), async () => {
-                const name = document.getElementById("cName").value.trim();
-                if (!name) throw new Error("collection_name is required.");
                 const res = await fetch(apiUrl(`/collections/${encodeURIComponent(name)}`), {
                     method: "DELETE",
                 });
-                if (!res.ok) {
-                    throw new Error(await res.text());
-                }
+                if (!res.ok) throw new Error(await res.text());
                 return await res.json();
             });
         };
 
+        // Ingest CSV
         document.getElementById("btnIngest").onclick = () => {
             handleFetch(document.getElementById("outIngest"), async () => {
                 const file = document.getElementById("csvFile").files[0];
                 const indexColumn = document.getElementById("indexColumn").value.trim();
                 const collectionName = document.getElementById("collectionName").value.trim();
+                
                 if (!file) throw new Error("Please select a CSV file.");
-                if (!indexColumn) throw new Error("index_column is required.");
+                if (!indexColumn) throw new Error("Index column is required.");
 
                 const form = new FormData();
                 form.append("file", file);
                 form.append("index_column", indexColumn);
                 if (collectionName) form.append("collection_name", collectionName);
 
-                const res = await fetch(apiUrl("/ingest"), { method: "POST", body: form });
-                if (!res.ok) {
-                    throw new Error(await res.text());
-                }
+                const res = await fetch(apiUrl("/ingest"), { 
+                    method: "POST", 
+                    body: form 
+                });
+                if (!res.ok) throw new Error(await res.text());
                 return await res.json();
             });
         };
 
+        // Query RAG
         document.getElementById("btnQuery").onclick = () => {
             handleFetch(document.getElementById("outQuery"), async () => {
                 const collection = document.getElementById("qCollection").value.trim();
@@ -347,9 +751,9 @@
                 const columnsRaw = document.getElementById("columnsToAnswer").value.trim();
                 const query = document.getElementById("queryText").value.trim();
 
-                if (!collection) throw new Error("collection_name is required.");
-                if (!query) throw new Error("query is required.");
-                if (!columnsRaw) throw new Error("columns_to_answer is required.");
+                if (!collection) throw new Error("Collection name is required.");
+                if (!query) throw new Error("Query is required.");
+                if (!columnsRaw) throw new Error("Columns to answer is required.");
 
                 const body = {
                     query,
@@ -362,9 +766,7 @@
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(body),
                 });
-                if (!res.ok) {
-                    throw new Error(await res.text());
-                }
+                if (!res.ok) throw new Error(await res.text());
                 return await res.json();
             });
         };

@@ -2,23 +2,13 @@
 python -m venv .venv
 .\.venv\Scripts\activate.bat
 pip install -r requirements.txt
-
-# Tải model về local (khuyến nghị - tránh lỗi timeout)
-python download_model.py
-
-# Chạy API
 uvicorn API_RAG_NEW.main:app
 
-## Expose API ra internet bằng ngrok
-Sau khi chạy API ở trên, mở terminal mới và chạy:
-```bash
-ngrok http 8000
-```
-Ngrok sẽ tạo URL public (ví dụ: https://xxxx-xxxx-xxxx.ngrok-free.app) để truy cập API từ bất kỳ đâu.
-
-## Các API chính (base URL: http://127.0.0.1:8000 hoặc ngrok URL)
+## Các API chính (base URL: http://127.0.0.1:8000)
 
 - **Health**: `GET /health` → trả `{ "status": "ok" }`
+- **⚡ Chat Gemini trực tiếp**: `POST /chat/gemini` → **MỚI! Chat trực tiếp không cần RAG**
+  - Body: `{ "query": "Câu hỏi của bạn", "api_key": "optional" }`
 - **List collections**: `GET /collections`
 - **Tạo collection**: `POST /collections`
   - Body: `{ "name": "rag_collection_demo", "description": "Demo" }`
@@ -30,14 +20,33 @@ Ngrok sẽ tạo URL public (ví dụ: https://xxxx-xxxx-xxxx.ngrok-free.app) đ
   - Form-data: `file` (CSV), `index_column`, `collection_name` (optional)
 - **Query RAG**: `POST /collections/{collection_name}/query`
   - Body:
-    `{ "query": "...", "columns_to_answer": [...], "number_docs_retrieval": 3 }`
-  - Lưu ý: `GEMINI_API_KEY` được đọc từ file `.env`
+    `{ "query": "...", "columns_to_answer": [...], "number_docs_retrieval": 3, "gemini_api_key": "..." (optional) }`
 
 ## Ví dụ nhanh (curl)
 
 - **Health – GET /health**
   ```bash
   curl http://127.0.0.1:8000/health
+  ```
+
+- **⚡ Chat Gemini trực tiếp – POST /chat/gemini (MỚI!)**
+  ```bash
+  # Đơn giản nhất - không cần collection, không cần upload data
+  curl -X POST http://127.0.0.1:8000/chat/gemini ^
+    -H "Content-Type: application/json" ^
+    -d "{\"query\": \"Giải thích carbon footprint là gì?\"}"
+  
+  # Hoặc truyền api_key riêng
+  curl -X POST http://127.0.0.1:8000/chat/gemini ^
+    -H "Content-Type: application/json" ^
+    -d "{\"query\": \"Carbon footprint là gì?\", \"api_key\": \"YOUR_GEMINI_KEY\"}"
+  ```
+  **Response:**
+  ```json
+  {
+    "query": "Giải thích carbon footprint là gì?",
+    "answer": "Carbon footprint là tổng lượng khí nhà kính..."
+  }
   ```
 
 - **List collections – GET /collections**

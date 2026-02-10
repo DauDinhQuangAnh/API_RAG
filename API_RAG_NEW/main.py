@@ -18,6 +18,7 @@ from constant import GEMINI
 from llms.onlinellms import OnlineLLMs
 from search import vector_search
 from utils import clean_collection_name, divide_dataframe, process_batch
+from database import get_db_connection
 
 
 load_dotenv()
@@ -77,9 +78,62 @@ class QueryResponse(BaseModel):
     full_prompt: str
 
 
+class DirectChatRequest(BaseModel):
+    query: str
+    api_key: Optional[str] = None
+
+
+class DirectChatResponse(BaseModel):
+    query: str
+    answer: str
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
+
+
+@app.get("/db/test")
+def test_database_connection() -> dict:
+    """Test PostgreSQL database connection"""
+    db = get_db_connection()
+    result = db.test_connection()
+    return result
+
+
+@app.post("/chat/gemini", response_model=DirectChatResponse)
+def chat_with_gemini(req: DirectChatRequest) -> DirectChatResponse:
+    """
+    Chat trực tiếp với Gemini - không cần RAG, không cần collection
+    - Nếu không truyền api_key, sẽ dùng GEMINI_API_KEY từ .env
+    - Trả về câu trả lời thuần từ Gemini
+    """
+    api_key = req.api_key or GEMINI_API_KEY
+    
+    if not api_key:
+        raise HTTPException(
+            status_code=400,
+            detail="GEMINI_API_KEY not found. Please provide api_key in request or set in .env file"
+        )
+    
+    try:
+        llm = OnlineLLMs(
+            name=GEMINI,
+            api_key=api_key,
+            model_version=GEMINI_MODEL,
+        )
+        
+        answer = llm.generate_content(req.query)
+        
+        return DirectChatResponse(
+            query=req.query,
+            answer=answer
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error calling Gemini: {str(e)}"
+        )
 
 
 @app.get("/collections")
