@@ -701,13 +701,16 @@ def query_collection(collection_name: str, req: QueryRequest) -> QueryResponse:
         model_version=GEMINI_MODEL,
     )
 
-    metadatas, retrieved_data = vector_search(
-        _embedding_model,
-        req.query,
-        collection,
-        req.columns_to_answer,
-        req.number_docs_retrieval,
-    )
+    try:
+        metadatas, retrieved_data = vector_search(
+            _embedding_model,
+            req.query,
+            collection,
+            req.columns_to_answer,
+            req.number_docs_retrieval,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     enhanced_prompt = (
         "Bạn là Weavey, trợ lý AI bền vững của WeaveCarbon hỗ trợ ngành dệt may Việt Nam "
