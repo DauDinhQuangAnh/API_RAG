@@ -23,13 +23,25 @@ from database import get_db_connection
 
 load_dotenv()
 
-app = FastAPI(title="RAG API", version="1.0.0")
+
+def _parse_cors_origins(raw_value: str | None) -> list[str]:
+    if not raw_value:
+        return ["*"]
+
+    origins = [item.strip() for item in raw_value.split(",") if item.strip()]
+    return origins or ["*"]
+
+
+ROOT_PATH = os.getenv("ROOT_PATH", "").strip()
+ALLOWED_ORIGINS = _parse_cors_origins(os.getenv("RAG_CORS_ORIGINS"))
+
+app = FastAPI(title="RAG API", version="1.0.0", root_path=ROOT_PATH)
 
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials="*" not in ALLOWED_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )

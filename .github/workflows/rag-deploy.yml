@@ -1,0 +1,88 @@
+name: RAG Deploy VPS
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+
+    steps:
+      - name: Check deploy secrets
+        id: deploy_secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=0
+          for var in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY; do
+            if [[ -z "${!var:-}" ]]; then
+              echo "::warning title=Missing secret::$var is not configured. Skipping deploy."
+              missing=1
+            fi
+          done
+          echo "missing=$missing" >> "$GITHUB_OUTPUT"
+
+      - name: Skip deploy until secrets are configured
+        if: steps.deploy_secrets.outputs.missing != '0'
+        run: echo "Skipping deploy because DEPLOY_* GitHub secrets are not configured yet."
+
+      - name: Checkout
+        if: steps.deploy_secrets.outputs.missing == '0'
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        if: steps.deploy_secrets.outputs.missing == '0'
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Syntax check
+        if: steps.deploy_secrets.outputs.missing == '0'
+        run: python -m compileall API_RAG_NEW chunking llms *.py
+
+      - name: Configure SSH
+        if: steps.deploy_secrets.outputs.missing == '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+          chmod 644 ~/.ssh/known_hosts
+
+      - name: Deploy on VPS
+        if: steps.deploy_secrets.outputs.missing == '0'
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEPLOY_PORT="${DEPLOY_PORT:-22}"
+          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" <<'EOF'
+          set -euo pipefail
+          cd /opt/weavecarbon/FE
+          git checkout main
+          git pull --ff-only origin main
+          cd /opt/weavecarbon/BE_Carbon-main
+          git checkout main
+          git pull --ff-only origin main
+          cd /opt/weavecarbon/rag
+          git checkout main
+          git pull --ff-only origin main
+          cd /opt/weavecarbon/FE
+          bash deploy/redeploy-vps.sh
+          EOF
