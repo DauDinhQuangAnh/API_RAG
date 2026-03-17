@@ -435,6 +435,46 @@
                 </button>
                 <pre id="outChatGemini"></pre>
             </div>
+
+            <!-- Company Recommendations -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon">🏢</div>
+                    <h3>Company Recommendations</h3>
+                    <span class="method-badge method-post">POST</span>
+                </div>
+                <div style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">
+                    📍 <code>/recommendations/company/{company_id}</code>
+                </div>
+                <div class="form-group">
+                    <label>Company ID</label>
+                    <input id="companyId" placeholder="uuid-company-id" />
+                </div>
+                <button class="btn-primary" id="btnCompanyRec">
+                    <span>▶</span> Get Company Recommendations
+                </button>
+                <pre id="outCompanyRec"></pre>
+            </div>
+
+            <!-- Product Suggestions -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon">📦</div>
+                    <h3>Product Suggestions</h3>
+                    <span class="method-badge method-post">POST</span>
+                </div>
+                <div style="color: var(--text-secondary); font-size: 13px; margin-bottom: 16px;">
+                    📍 <code>/recommendations/product/{product_id}</code>
+                </div>
+                <div class="form-group">
+                    <label>Product ID</label>
+                    <input id="productId" placeholder="uuid-product-id" />
+                </div>
+                <button class="btn-primary" id="btnProductSug">
+                    <span>▶</span> Get Product Suggestions
+                </button>
+                <pre id="outProductSug"></pre>
+            </div>
         </div>
 
         <!-- Create Collection -->
@@ -575,6 +615,15 @@
             return `${baseUrlEl.value.replace(/\/$/, "")}${path}`;
         }
 
+        // Helper function to fetch with ngrok bypass header
+        async function apiFetch(url, options = {}) {
+            const headers = {
+                'ngrok-skip-browser-warning': 'true',
+                ...options.headers
+            };
+            return fetch(url, { ...options, headers });
+        }
+
         async function handleFetch(outputEl, fn) {
             outputEl.textContent = "⏳ Loading...";
             outputEl.className = "loading";
@@ -591,7 +640,7 @@
         // Health Check
         document.getElementById("btnHealth").onclick = () => {
             handleFetch(document.getElementById("outHealth"), async () => {
-                const res = await fetch(apiUrl("/health"));
+                const res = await apiFetch(apiUrl("/health"));
                 if (!res.ok) throw new Error(await res.text());
                 return await res.json();
             });
@@ -600,7 +649,7 @@
         // Database Test
         document.getElementById("btnDbTest").onclick = () => {
             handleFetch(document.getElementById("outDbTest"), async () => {
-                const res = await fetch(apiUrl("/db/test"));
+                const res = await apiFetch(apiUrl("/db/test"));
                 if (!res.ok) throw new Error(await res.text());
                 return await res.json();
             });
@@ -609,7 +658,7 @@
         // List Collections
         document.getElementById("btnCollections").onclick = () => {
             handleFetch(document.getElementById("outCollections"), async () => {
-                const res = await fetch(apiUrl("/collections"));
+                const res = await apiFetch(apiUrl("/collections"));
                 if (!res.ok) throw new Error(await res.text());
                 return await res.json();
             });
@@ -625,7 +674,43 @@
                 const body = { query };
                 if (apiKey) body.api_key = apiKey;
                 
-                const res = await fetch(apiUrl("/chat/gemini"), {
+                const res = await apiFetch(apiUrl("/chat/gemini"), {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body),
+                });
+                if (!res.ok) throw new Error(await res.text());
+                return await res.json();
+            });
+        };
+
+        // Company Recommendations
+        document.getElementById("btnCompanyRec").onclick = () => {
+            handleFetch(document.getElementById("outCompanyRec"), async () => {
+                const companyId = document.getElementById("companyId").value.trim();
+                if (!companyId) throw new Error("Company ID is required.");
+                
+                const body = { company_id: companyId, language: "vi" };
+                
+                const res = await apiFetch(apiUrl(`/recommendations/company/${encodeURIComponent(companyId)}`), {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(body),
+                });
+                if (!res.ok) throw new Error(await res.text());
+                return await res.json();
+            });
+        };
+
+        // Product Suggestions
+        document.getElementById("btnProductSug").onclick = () => {
+            handleFetch(document.getElementById("outProductSug"), async () => {
+                const productId = document.getElementById("productId").value.trim();
+                if (!productId) throw new Error("Product ID is required.");
+                
+                const body = { product_id: productId, language: "vi" };
+                
+                const res = await apiFetch(apiUrl(`/recommendations/product/${encodeURIComponent(productId)}`), {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(body),
@@ -645,7 +730,7 @@
                 const body = { name };
                 if (description) body.description = description;
                 
-                const res = await fetch(apiUrl("/collections"), {
+                const res = await apiFetch(apiUrl("/collections"), {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(body),
@@ -661,7 +746,7 @@
                 const name = document.getElementById("cName").value.trim();
                 if (!name) throw new Error("Collection name is required.");
                 
-                const res = await fetch(apiUrl(`/collections/${encodeURIComponent(name)}`));
+                const res = await apiFetch(apiUrl(`/collections/${encodeURIComponent(name)}`));
                 if (!res.ok) throw new Error(await res.text());
                 return await res.json();
             });
@@ -689,7 +774,7 @@
                     throw new Error("Either new_name or metadata must be provided.");
                 }
 
-                const res = await fetch(apiUrl(`/collections/${encodeURIComponent(name)}`), {
+                const res = await apiFetch(apiUrl(`/collections/${encodeURIComponent(name)}`), {
                     method: "PATCH",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(body),
@@ -711,7 +796,7 @@
             }
             
             handleFetch(document.getElementById("outCrudCollection"), async () => {
-                const res = await fetch(apiUrl(`/collections/${encodeURIComponent(name)}`), {
+                const res = await apiFetch(apiUrl(`/collections/${encodeURIComponent(name)}`), {
                     method: "DELETE",
                 });
                 if (!res.ok) throw new Error(await res.text());
@@ -734,7 +819,7 @@
                 form.append("index_column", indexColumn);
                 if (collectionName) form.append("collection_name", collectionName);
 
-                const res = await fetch(apiUrl("/ingest"), { 
+                const res = await apiFetch(apiUrl("/ingest"), { 
                     method: "POST", 
                     body: form 
                 });
@@ -761,7 +846,7 @@
                     number_docs_retrieval: numDocs,
                 };
 
-                const res = await fetch(apiUrl(`/collections/${encodeURIComponent(collection)}/query`), {
+                const res = await apiFetch(apiUrl(`/collections/${encodeURIComponent(collection)}/query`), {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(body),

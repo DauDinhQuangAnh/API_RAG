@@ -88,6 +88,45 @@ class DirectChatResponse(BaseModel):
     answer: str
 
 
+class CompanyRecommendationRequest(BaseModel):
+    company_id: str
+    language: Optional[str] = "vi"
+
+
+class CompanyRecommendation(BaseModel):
+    id: str
+    title: str
+    description: str
+    impact: str  # high/medium/low
+    reduction: str  # "15%"
+    difficulty: str  # easy/medium/hard
+    category: str  # material/transport/production/packaging/compliance/data_quality
+
+
+class CompanyRecommendationResponse(BaseModel):
+    company_id: str
+    recommendations: List[CompanyRecommendation]
+
+
+class ProductSuggestionRequest(BaseModel):
+    product_id: str
+    language: Optional[str] = "vi"
+
+
+class ProductSuggestion(BaseModel):
+    id: str
+    type: str  # material/transport/manufacturing/packaging/end_of_life
+    title: str
+    description: str
+    potentialReduction: int  # percentage
+    difficulty: str  # easy/medium/hard
+
+
+class ProductSuggestionResponse(BaseModel):
+    product_id: str
+    suggestions: List[ProductSuggestion]
+
+
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
@@ -134,6 +173,340 @@ def chat_with_gemini(req: DirectChatRequest) -> DirectChatResponse:
             status_code=500,
             detail=f"Error calling Gemini: {str(e)}"
         )
+
+
+@app.post("/recommendations/company/{company_id}", response_model=CompanyRecommendationResponse)
+def generate_company_recommendations(company_id: str, req: CompanyRecommendationRequest) -> CompanyRecommendationResponse:
+    """
+    Tạo khuyến nghị cải thiện carbon footprint cấp công ty
+    - Query PostgreSQL để lấy aggregated company data
+    - Phân tích opportunities (materials, transport, production, compliance)
+    - Generate 3 recommendations với Gemini
+    """
+    
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=400, detail="GEMINI_API_KEY not configured")
+    
+    db = get_db_connection()
+    
+    try:
+        db.connect()
+        
+        # Query company context
+        query = """
+        WITH company_stats AS (
+          SELECT 
+            p.company_id,
+            COUNT(p.id) as sku_count,
+            SUM(p.total_co2e) as total_co2e,
+            SUM(p.materials_co2e) as materials_total,
+            SUM(p.production_co2e) as production_total,
+            SUM(p.transport_co2e) as transport_total,
+            SUM(p.packaging_co2e) as packaging_total,
+            AVG(p.data_confidence_score) as avg_confidence,
+            COUNT(CASE WHEN p.status = 'active' THEN 1 END)::float / NULLIF(COUNT(*), 0) as published_ratio
+          FROM products p
+          WHERE p.company_id = %s
+          GROUP BY p.company_id
+        ),
+        carbon_trend AS (
+          SELECT 
+            year, month, actual_co2e, target_co2e,
+            LAG(actual_co2e) OVER (ORDER BY year, month) as prev_month
+          FROM carbon_targets
+          WHERE company_id = %s
+          ORDER BY year DESC, month DESC
+          LIMIT 6
+        ),
+        market_status AS (
+          SELECT market_code, readiness_score, status, requirements_missing
+          FROM market_readiness
+          WHERE company_id = %s
+        ),
+        top_materials AS (
+          SELECT 
+            m.name,
+            m.category,
+            m.default_co2e_per_kg,
+            COUNT(pm.id) as usage_count,
+            SUM(pm.weight_kg) as total_weight
+          FROM product_materials pm
+          JOIN materials m ON pm.material_id = m.id
+          JOIN products p ON pm.product_id = p.id
+          WHERE p.company_id = %s
+          GROUP BY m.id, m.name, m.category, m.default_co2e_per_kg
+          ORDER BY total_weight DESC
+          LIMIT 5
+        ),
+        transport_analysis AS (
+          SELECT 
+            sl.transport_mode,
+            COUNT(*) as leg_count,
+            SUM(sl.co2e) as mode_co2e
+          FROM shipment_legs sl
+          JOIN shipments s ON sl.shipment_id = s.id
+          WHERE s.company_id = %s
+          GROUP BY sl.transport_mode
+        )
+        SELECT json_build_object(
+          'stats', (SELECT row_to_json(company_stats.*) FROM company_stats),
+          'carbon_trend', (SELECT COALESCE(json_agg(carbon_trend.*), '[]'::json) FROM carbon_trend),
+          'markets', (SELECT COALESCE(json_agg(market_status.*), '[]'::json) FROM market_status),
+          'top_materials', (SELECT COALESCE(json_agg(top_materials.*), '[]'::json) FROM top_materials),
+          'transport', (SELECT COALESCE(json_agg(transport_analysis.*), '[]'::json) FROM transport_analysis)
+        ) as context
+        """
+        
+        result = db.execute_query(query, (company_id, company_id, company_id, company_id, company_id))
+        
+        if not result or not result[0]['context']:
+            raise HTTPException(status_code=404, detail="Company data not found")
+        
+        context = result[0]['context']
+        
+        # Build system prompt
+        system_prompt = """Bạn là chuyên gia tư vấn giảm phát thải carbon cho doanh nghiệp thời trang/dệt may Việt Nam.
+
+## Ngữ cảnh dự án
+WeaveCarbon là nền tảng SaaS giúp doanh nghiệp SME ngành thời trang/dệt may Việt Nam đo lường, quản lý và tối ưu hóa dấu chân carbon (carbon footprint) của sản phẩm. Hệ thống hỗ trợ:
+- Đánh giá carbon theo vòng đời sản phẩm (LCA): vật liệu, sản xuất, vận chuyển, đóng gói, end-of-life
+- Quản lý chuỗi cung ứng và logistics đa chặng (đường bộ, đường biển, đường hàng không, đường sắt)
+- Đảm bảo tuân thủ quy định xuất khẩu: EU CBAM, US Climate Act, JP JIS, KR K-ETS
+- Theo dõi mục tiêu giảm phát thải theo tháng
+
+Đối tượng người dùng chính là các doanh nghiệp vừa và nhỏ (SME) Việt Nam trong ngành dệt may, có nhu cầu xuất khẩu sang EU, US, Nhật Bản, Hàn Quốc.
+
+## Nhiệm vụ
+Dựa trên dữ liệu tổng hợp công ty được cung cấp, hãy đưa ra đúng 3 khuyến nghị chiến lược cấp công ty để giảm carbon footprint.
+
+## Yêu cầu mỗi khuyến nghị:
+1. Tiêu đề ngắn gọn (< 50 ký tự)
+2. Mô tả cụ thể, hành động được (1-2 câu)
+3. Mức độ ảnh hưởng: high/medium/low
+4. Phần trăm giảm thiểu dự kiến (ví dụ: "15%")
+5. Độ khó thực hiện: easy/medium/hard
+6. Danh mục: material/transport/production/packaging/compliance/data_quality
+
+## Nguyên tắc ưu tiên:
+- Ưu tiên khuyến nghị có tác động lớn nhất (giảm CO2e nhiều nhất)
+- Phù hợp với quy mô và nguồn lực SME Việt Nam
+- Khả thi trong 3-6 tháng
+- Hỗ trợ mục tiêu xuất khẩu EU/US
+- Mỗi khuyến nghị nên thuộc danh mục khác nhau để đa dạng hóa chiến lược
+
+## Format output
+Trả về mảng JSON gồm đúng 3 object, mỗi object có các trường: id, title, description, impact, reduction, difficulty, category.
+
+Ví dụ format:
+{
+  "recommendations": [
+    {
+      "id": "rec_001",
+      "title": "Chuyển sang cotton hữu cơ",
+      "description": "Thay thế 50% cotton thông thường bằng cotton hữu cơ cho các dòng sản phẩm chủ lực",
+      "impact": "high",
+      "reduction": "15%",
+      "difficulty": "medium",
+      "category": "material"
+    }
+  ]
+}"""
+        
+        user_prompt = f"Dữ liệu công ty:\n{context}\n\nHãy phân tích và đưa ra 3 khuyến nghị chiến lược."
+        
+        # Call Gemini
+        llm = OnlineLLMs(
+            name=GEMINI,
+            api_key=GEMINI_API_KEY,
+            model_version=GEMINI_MODEL,
+        )
+        
+        full_prompt = f"{system_prompt}\n\n{user_prompt}"
+        answer = llm.generate_content(full_prompt)
+        
+        # Parse JSON response
+        import json
+        import re
+        
+        # Extract JSON from response
+        json_match = re.search(r'\{[\s\S]*\}', answer)
+        if json_match:
+            result_json = json.loads(json_match.group())
+            recommendations = result_json.get('recommendations', [])
+        else:
+            raise HTTPException(status_code=500, detail="Failed to parse AI response")
+        
+        db.disconnect()
+        
+        return CompanyRecommendationResponse(
+            company_id=company_id,
+            recommendations=[CompanyRecommendation(**rec) for rec in recommendations]
+        )
+        
+    except Exception as e:
+        db.disconnect()
+        raise HTTPException(status_code=500, detail=f"Error generating recommendations: {str(e)}")
+
+
+@app.post("/recommendations/product/{product_id}", response_model=ProductSuggestionResponse)
+def generate_product_suggestions(product_id: str, req: ProductSuggestionRequest) -> ProductSuggestionResponse:
+    """
+    Tạo gợi ý cải thiện carbon footprint cấp sản phẩm
+    - Query PostgreSQL để lấy chi tiết sản phẩm
+    - Phân tích materials, manufacturing, transport, packaging
+    - Generate 3 suggestions với Gemini
+    """
+    
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=400, detail="GEMINI_API_KEY not configured")
+    
+    db = get_db_connection()
+    
+    try:
+        db.connect()
+        
+        # Query product context
+        query = """
+        SELECT
+          -- Product basic
+          p.id as product_id,
+          p.name as product_name,
+          p.category as product_type,
+          p.weight_kg * 1000 as weight_grams,
+          p.status,
+
+          -- Carbon totals
+          p.total_co2e,
+          p.materials_co2e,
+          p.production_co2e,
+          p.transport_co2e,
+          p.packaging_co2e,
+          p.data_confidence_score,
+
+          -- Company context
+          c.target_markets,
+          c.business_type,
+
+          -- Materials with factors
+          (
+            SELECT COALESCE(json_agg(json_build_object(
+              'name', m.name,
+              'percentage', pm.percentage,
+              'emission_factor', m.default_co2e_per_kg,
+              'is_recycled', m.is_recycled,
+              'certifications', m.certifications,
+              'category', m.category
+            )), '[]'::json)
+            FROM product_materials pm
+            JOIN materials m ON pm.material_id = m.id
+            WHERE pm.product_id = p.id
+          ) as materials,
+
+          -- Transport info
+          (
+            SELECT COALESCE(json_agg(json_build_object(
+              'mode', sl.transport_mode,
+              'distance_km', sl.distance_km,
+              'co2e', sl.co2e
+            )), '[]'::json)
+            FROM shipments s
+            JOIN shipment_legs sl ON s.id = sl.shipment_id
+            JOIN shipment_products sp ON s.id = sp.shipment_id
+            WHERE sp.product_id = p.id
+          ) as transport_legs
+
+        FROM products p
+        JOIN companies c ON p.company_id = c.id
+        WHERE p.id = %s
+        """
+        
+        result = db.execute_query(query, (product_id,))
+        
+        if not result:
+            raise HTTPException(status_code=404, detail="Product not found")
+        
+        product_data = dict(result[0])
+        
+        # Build system prompt
+        system_prompt = """Bạn là chuyên gia tư vấn bền vững cho ngành dệt may Việt Nam.
+
+## Ngữ cảnh dự án
+WeaveCarbon là nền tảng SaaS giúp doanh nghiệp SME ngành thời trang/dệt may Việt Nam đo lường, quản lý và tối ưu hóa dấu chân carbon (carbon footprint) của sản phẩm. Hệ thống hỗ trợ:
+- Đánh giá carbon theo vòng đời sản phẩm (LCA): vật liệu, sản xuất, vận chuyển, đóng gói, end-of-life
+- Quản lý chuỗi cung ứng và logistics đa chặng (đường bộ, đường biển, đường hàng không, đường sắt)
+- Đảm bảo tuân thủ quy định xuất khẩu: EU CBAM, US Climate Act, JP JIS, KR K-ETS
+- Theo dõi mục tiêu giảm phát thải theo tháng
+
+Đối tượng người dùng chính là các doanh nghiệp vừa và nhỏ (SME) Việt Nam trong ngành dệt may, có nhu cầu xuất khẩu sang EU, US, Nhật Bản, Hàn Quốc.
+
+## Nhiệm vụ
+Dựa trên dữ liệu carbon footprint chi tiết của một sản phẩm cụ thể được cung cấp, hãy đưa ra đúng 3 gợi ý cải thiện cấp sản phẩm để giảm carbon footprint.
+
+## Yêu cầu mỗi gợi ý:
+1. Tiêu đề ngắn gọn (< 50 ký tự)
+2. Mô tả cụ thể, hành động được (action + expected outcome, 1-2 câu)
+3. Ước tính % giảm phát thải (số nguyên, dựa trên industry benchmarks)
+4. Mức độ khó thực hiện: easy/medium/hard
+5. Danh mục: material/transport/manufacturing/packaging/end_of_life
+
+## Nguyên tắc ưu tiên:
+- Ưu tiên gợi ý cho giai đoạn phát thải cao nhất
+- Phù hợp với quy mô và nguồn lực SME Việt Nam
+- Khả thi và có thể hành động ngay
+- Xem xét thị trường xuất khẩu để ưu tiên compliance-related suggestions
+- Mỗi gợi ý nên thuộc danh mục khác nhau để đa dạng hóa chiến lược
+
+## Format output
+Trả về mảng JSON gồm đúng 3 object, mỗi object có các trường: id, type, title, description, potentialReduction, difficulty.
+
+Ví dụ format:
+{
+  "suggestions": [
+    {
+      "id": "ai-sug-001",
+      "type": "material",
+      "title": "Tăng tỷ lệ polyester tái chế",
+      "description": "Nâng recycled polyester từ 60% lên 85% có thể giảm 20% phát thải vật liệu",
+      "potentialReduction": 12,
+      "difficulty": "medium"
+    }
+  ]
+}"""
+        
+        user_prompt = f"Dữ liệu sản phẩm:\n{product_data}\n\nHãy phân tích và đưa ra 3 gợi ý cải thiện."
+        
+        # Call Gemini
+        llm = OnlineLLMs(
+            name=GEMINI,
+            api_key=GEMINI_API_KEY,
+            model_version=GEMINI_MODEL,
+        )
+        
+        full_prompt = f"{system_prompt}\n\n{user_prompt}"
+        answer = llm.generate_content(full_prompt)
+        
+        # Parse JSON response
+        import json
+        import re
+        
+        # Extract JSON from response
+        json_match = re.search(r'\{[\s\S]*\}', answer)
+        if json_match:
+            result_json = json.loads(json_match.group())
+            suggestions = result_json.get('suggestions', [])
+        else:
+            raise HTTPException(status_code=500, detail="Failed to parse AI response")
+        
+        db.disconnect()
+        
+        return ProductSuggestionResponse(
+            product_id=product_id,
+            suggestions=[ProductSuggestion(**sug) for sug in suggestions]
+        )
+        
+    except Exception as e:
+        db.disconnect()
+        raise HTTPException(status_code=500, detail=f"Error generating suggestions: {str(e)}")
 
 
 @app.get("/collections")

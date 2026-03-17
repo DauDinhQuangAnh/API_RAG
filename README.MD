@@ -2,8 +2,8 @@
 python -m venv .venv
 .\.venv\Scripts\activate.bat
 pip install -r requirements.txt
-uvicorn API_RAG_NEW.main:app
-
+uvicorn API_RAG_NEW.main:app --host 0.0.0.0 --port 8000
+ngrok http 8000 --authtoken 3ATrkoV53hkN7BiSFRulmhXogXx_4i5pFjfLNexGcA7qrD6mU
 ## Các API chính (base URL: http://127.0.0.1:8000)
 
 - **Health**: `GET /health` → trả `{ "status": "ok" }`
