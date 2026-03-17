@@ -695,12 +695,6 @@ def query_collection(collection_name: str, req: QueryRequest) -> QueryResponse:
     except Exception:
         raise HTTPException(status_code=404, detail="Collection not found.")
 
-    llm = OnlineLLMs(
-        name=GEMINI,
-        api_key=GEMINI_API_KEY,
-        model_version=GEMINI_MODEL,
-    )
-
     try:
         metadatas, retrieved_data = vector_search(
             _embedding_model,
@@ -711,6 +705,18 @@ def query_collection(collection_name: str, req: QueryRequest) -> QueryResponse:
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    if not GEMINI_API_KEY:
+        raise HTTPException(status_code=503, detail="GEMINI_API_KEY not configured")
+
+    try:
+        llm = OnlineLLMs(
+            name=GEMINI,
+            api_key=GEMINI_API_KEY,
+            model_version=GEMINI_MODEL,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail=f"Failed to initialize Gemini client: {exc}") from exc
 
     enhanced_prompt = (
         "Bạn là Weavey, trợ lý AI bền vững của WeaveCarbon hỗ trợ ngành dệt may Việt Nam "
@@ -731,7 +737,10 @@ def query_collection(collection_name: str, req: QueryRequest) -> QueryResponse:
         f"Dữ liệu tham khảo:\n{retrieved_data}\n\n"
         "Hãy trả lời câu hỏi dựa trên dữ liệu tham khảo trên."
     )
-    answer = llm.generate_content(enhanced_prompt)
+    try:
+        answer = llm.generate_content(enhanced_prompt)
+    except Exception as exc:
+        raise HTTPException(status_code=502, detail=f"Failed to generate answer from Gemini: {exc}") from exc
 
     return QueryResponse(
         metadatas=metadatas,
