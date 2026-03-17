@@ -10,11 +10,11 @@ import pandas as pd
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
 
 from chunking import ProtonxSemanticChunker
 from constant import GEMINI
+from download_model import PRIMARY_MODEL_NAME, ensure_embedding_model
 from llms.onlinellms import OnlineLLMs
 from search import vector_search
 from utils import clean_collection_name, divide_dataframe, process_batch
@@ -35,12 +35,14 @@ app.add_middleware(
 )
 
 DB_PATH = os.getenv("CHROMA_DB_PATH", "db")
-DEFAULT_EMBEDDING_MODEL = "keepitreal/vietnamese-sbert"
+DEFAULT_EMBEDDING_MODEL = PRIMARY_MODEL_NAME
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
 _client = chromadb.PersistentClient(DB_PATH)
-_embedding_model = SentenceTransformer(DEFAULT_EMBEDDING_MODEL)
+_embedding_model, DEFAULT_EMBEDDING_MODEL, _ = ensure_embedding_model(
+    preferred_model=DEFAULT_EMBEDDING_MODEL
+)
 
 
 class IngestResponse(BaseModel):
