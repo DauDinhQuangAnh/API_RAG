@@ -1,15 +1,18 @@
+from __future__ import annotations
+
 import os
+from typing import Any
+
 import psycopg2
-from psycopg2.extras import RealDictCursor
-from typing import Optional, List, Dict, Any
 from dotenv import load_dotenv
+from psycopg2.extras import RealDictCursor
 
 load_dotenv()
 
 
 class PostgreSQLConnection:
     """PostgreSQL Database Connection Manager"""
-    
+
     def __init__(self):
         self.host = os.getenv("DB_HOST", "localhost")
         self.port = os.getenv("DB_PORT", "5432")
@@ -18,75 +21,91 @@ class PostgreSQLConnection:
         self.password = os.getenv("DB_PASSWORD", "123")
         self.connection = None
         self.cursor = None
-    
-    def connect(self):
-        """Establish connection to PostgreSQL"""
+
+    def __enter__(self) -> "PostgreSQLConnection":
+        self.connect()
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> None:
+        self.disconnect()
+
+    def connect(self) -> "PostgreSQLConnection":
+        """Establish connection to PostgreSQL."""
+        if self.connection and getattr(self.connection, "closed", 1) == 0:
+            return self
+
         try:
             self.connection = psycopg2.connect(
                 host=self.host,
                 port=self.port,
                 database=self.database,
                 user=self.user,
-                password=self.password
+                password=self.password,
             )
             self.cursor = self.connection.cursor(cursor_factory=RealDictCursor)
-            return True
-        except Exception as e:
-            raise Exception(f"Failed to connect to PostgreSQL: {str(e)}")
-    
-    def disconnect(self):
-        """Close connection"""
+            return self
+        except Exception as exc:
+            self.connection = None
+            self.cursor = None
+            raise RuntimeError(f"Failed to connect to PostgreSQL: {exc}") from exc
+
+    def disconnect(self) -> None:
+        """Close connection."""
         if self.cursor:
             self.cursor.close()
         if self.connection:
             self.connection.close()
-    
-    def execute_query(self, query: str, params: Optional[tuple] = None) -> List[Dict[str, Any]]:
-        """Execute SELECT query and return results"""
+        self.cursor = None
+        self.connection = None
+
+    def _ensure_connected(self) -> None:
+        if not self.connection or getattr(self.connection, "closed", 1) != 0:
+            self.connect()
+
+    def execute_query(
+        self, query: str, params: tuple[Any, ...] | None = None
+    ) -> list[dict[str, Any]]:
+        """Execute SELECT query and return results."""
+        self._ensure_connected()
         try:
             self.cursor.execute(query, params)
             return self.cursor.fetchall()
-        except Exception as e:
-            raise Exception(f"Query execution failed: {str(e)}")
-    
-    def execute_update(self, query: str, params: Optional[tuple] = None) -> int:
-        """Execute INSERT/UPDATE/DELETE and return affected rows"""
+        except Exception as exc:
+            raise RuntimeError(f"Query execution failed: {exc}") from exc
+
+    def execute_update(
+        self, query: str, params: tuple[Any, ...] | None = None
+    ) -> int:
+        """Execute INSERT/UPDATE/DELETE and return affected rows."""
+        self._ensure_connected()
         try:
             self.cursor.execute(query, params)
             self.connection.commit()
             return self.cursor.rowcount
-        except Exception as e:
+        except Exception as exc:
             self.connection.rollback()
-            raise Exception(f"Update execution failed: {str(e)}")
-    
+            raise RuntimeError(f"Update execution failed: {exc}") from exc
+
     def test_connection(self) -> dict:
-        """Test database connection"""
+        """Test database connection."""
         try:
-            self.connect()
-            self.cursor.execute("SELECT version();")
-            version = self.cursor.fetchone()
-            self.disconnect()
+            with self:
+                self.cursor.execute("SELECT version();")
+                version = self.cursor.fetchone()
             return {
                 "status": "success",
                 "message": "Connected to PostgreSQL successfully",
                 "database": self.database,
-                "version": version['version'] if version else None
+                "version": version["version"] if version else None,
             }
-        except Exception as e:
+        except Exception as exc:
             return {
                 "status": "error",
-                "message": str(e),
-                "database": self.database
+                "message": str(exc),
+                "database": self.database,
             }
-
-
-# Singleton instance
-_db_connection: Optional[PostgreSQLConnection] = None
 
 
 def get_db_connection() -> PostgreSQLConnection:
-    """Get or create database connection instance"""
-    global _db_connection
-    if _db_connection is None:
-        _db_connection = PostgreSQLConnection()
-    return _db_connection
+    """Create a fresh database connection manager for each request flow."""
+    return PostgreSQLConnection()

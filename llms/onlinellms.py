@@ -1,17 +1,22 @@
-from constant import GEMINI
+from __future__ import annotations
+
+import backoff
 from google import genai
 from google.genai import types
+
 from .base import LLM
-import backoff
+
+
+GEMINI_PROVIDER = "gemini"
 
 
 class OnlineLLMs(LLM):
     def __init__(self, name, api_key=None, model_version=None):
-        self.name = name
+        self.name = name.lower()
         self.client = None
         self.model_version = model_version
 
-        if self.name.lower() == GEMINI:
+        if self.name == GEMINI_PROVIDER:
             # Prefer explicit API key if provided; otherwise rely on GEMINI_API_KEY env var.
             if api_key:
                 self.client = genai.Client(api_key=api_key)
@@ -35,7 +40,7 @@ class OnlineLLMs(LLM):
     
     @backoff.on_exception(backoff.expo, Exception, max_tries=3)
     def create_agentic_chunker_message(self, system_prompt, messages, max_tokens=1000, temperature=1):
-        if self.name.lower() != GEMINI:
+        if self.name != GEMINI_PROVIDER:
             raise ValueError(f"Unknown model name: {self.name}")
         if not self.client:
             raise ValueError("Gemini client is not initialized.")
@@ -67,7 +72,7 @@ class OnlineLLMs(LLM):
                 "Client is not set. Please initialize Gemini client or call set_model()."
             )
 
-        if self.name.lower() != GEMINI:
+        if self.name != GEMINI_PROVIDER:
             raise ValueError(f"Unknown model name: {self.name}")
 
         response = self.client.models.generate_content(
@@ -79,4 +84,3 @@ class OnlineLLMs(LLM):
         if not isinstance(content, str):
             content = str(content)
         return content
-
