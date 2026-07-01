@@ -34,3 +34,4 @@ from API_RAG_NEW.recommendation_service import (  # noqa: F401
     generate_company_recommendations,
     generate_product_suggestions,
 )
+from API_RAG_NEW.extraction_service import extract_document_fields  # noqa: F401
