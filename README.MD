@@ -1,94 +1,71 @@
-# Tạo venv & chạy API
+# RAG API
+
+Tai lieu nay chi ghi cac thong tin can thiet de chay local. Khong commit file `.env`, API key, du lieu nguoi dung, file upload mau, log runtime, hoac noi dung collection len repo.
+
+## Chay local
+
+```bash
 python -m venv .venv
 .\.venv\Scripts\activate.bat
 pip install -r requirements.txt
 uvicorn API_RAG_NEW.main:app --host 0.0.0.0 --port 8000
-ngrok http 8000 --authtoken 3ATrkoV53hkN7BiSFRulmhXogXx_4i5pFjfLNexGcA7qrD6mU
-## Các API chính (base URL: http://127.0.0.1:8000)
+```
+ngrok http 8000
 
-- **Health**: `GET /health` → trả `{ "status": "ok" }`
-- **⚡ Chat Gemini trực tiếp**: `POST /chat/gemini` → **MỚI! Chat trực tiếp không cần RAG**
-  - Body: `{ "query": "Câu hỏi của bạn", "api_key": "optional" }`
-- **List collections**: `GET /collections`
-- **Tạo collection**: `POST /collections`
-  - Body: `{ "name": "rag_collection_demo", "description": "Demo" }`
-- **Xem 1 collection**: `GET /collections/{collection_name}`
-- **Sửa collection**: `PATCH /collections/{collection_name}`
-  - Body (ít nhất 1 field): `{ "new_name": "new_name", "metadata": { ... } }`
-- **Xóa collection**: `DELETE /collections/{collection_name}`
-- **Ingest CSV**: `POST /ingest`
-  - Form-data: `file` (CSV), `index_column`, `collection_name` (optional)
-- **Query RAG**: `POST /collections/{collection_name}/query`
-  - Body:
-    `{ "query": "...", "columns_to_answer": [...], "number_docs_retrieval": 3, "gemini_api_key": "..." (optional) }`
+Hoac dung Python portable trong repo neu co:
 
-## Ví dụ nhanh (curl)
+```bash
+.\python\python.exe -m uvicorn API_RAG_NEW.main:app --host 0.0.0.0 --port 8000
+```
 
-- **Health – GET /health**
-  ```bash
-  curl http://127.0.0.1:8000/health
-  ```
+Base URL mac dinh: `http://127.0.0.1:8000`
 
-- **⚡ Chat Gemini trực tiếp – POST /chat/gemini (MỚI!)**
-  ```bash
-  # Đơn giản nhất - không cần collection, không cần upload data
-  curl -X POST http://127.0.0.1:8000/chat/gemini ^
-    -H "Content-Type: application/json" ^
-    -d "{\"query\": \"Giải thích carbon footprint là gì?\"}"
-  
-  # Hoặc truyền api_key riêng
-  curl -X POST http://127.0.0.1:8000/chat/gemini ^
-    -H "Content-Type: application/json" ^
-    -d "{\"query\": \"Carbon footprint là gì?\", \"api_key\": \"YOUR_GEMINI_KEY\"}"
-  ```
-  **Response:**
-  ```json
-  {
-    "query": "Giải thích carbon footprint là gì?",
-    "answer": "Carbon footprint là tổng lượng khí nhà kính..."
-  }
-  ```
+## Cau hinh
 
-- **List collections – GET /collections**
-  ```bash
-  curl http://127.0.0.1:8000/collections
-  ```
+Tao file `.env` tu `.env.example`, sau do dien gia tri phu hop cho moi truong local. File `.env` chua secret nen khong duoc commit.
 
-- **Tạo collection – POST /collections**
-  ```bash
-  curl -X POST http://127.0.0.1:8000/collections ^
-    -H "Content-Type: application/json" ^
-    -d "{\"name\": \"rag_collection_demo\", \"description\": \"Demo\"}"
-  ```
+Mot so cau hinh thuong dung:
 
-- **Xem 1 collection – GET /collections/{collection_name}**
-  ```bash
-  curl http://127.0.0.1:8000/collections/rag_collection_demo
-  ```
+- model LLM
+- duong dan Chroma DB
+- so luong chunk truy xuat
+- che do chunking
+- CORS origins cho local/dev
 
-- **Sửa collection – PATCH /collections/{collection_name}**
-  ```bash
-  curl -X PATCH http://127.0.0.1:8000/collections/rag_collection_demo ^
-    -H "Content-Type: application/json" ^
-    -d "{\"new_name\": \"rag_collection_new\", \"metadata\": {\"description\": \"Updated\"}}"
-  ```
+Endpoint `/runtime-config` chi tra ve cau hinh runtime khong chua secret.
 
-- **Xóa collection – DELETE /collections/{collection_name}**
-  ```bash
-  curl -X DELETE http://127.0.0.1:8000/collections/rag_collection_new
-  ```
+## API chinh
 
-- **Ingest CSV – POST /ingest**
-  ```bash
-  curl -X POST http://127.0.0.1:8000/ingest ^
-    -F "file=@data.csv" ^
-    -F "index_column=content" ^
-    -F "collection_name=rag_collection_demo"
-  ```
+- `GET /health`: kiem tra server.
+- `GET /runtime-config`: xem cau hinh runtime an toan.
+- `GET /collections`: lay danh sach collections.
+- `POST /collections`: tao collection.
+- `GET /collections/{collection_name}`: xem thong tin collection.
+- `PATCH /collections/{collection_name}`: cap nhat thong tin collection.
+- `DELETE /collections/{collection_name}`: xoa collection.
+- `GET /collections/{collection_name}/records`: xem records trong collection.
+- `POST /ingest`: ingest file tai lieu.
+- `POST /collections/{collection_name}/query`: hoi dap RAG tren collection.
 
-- **Query RAG – POST /collections/{collection_name}/query**
-  ```bash
-  curl -X POST http://127.0.0.1:8000/collections/rag_collection_demo/query ^
-    -H "Content-Type: application/json" ^
-    -d "{\"query\": \"Hỏi gì đó...\", \"columns_to_answer\": [\"content\"], \"number_docs_retrieval\": 3}"
-  ```
+## File ho tro ingest
+
+- PDF
+- DOCX
+- TXT/TEXT
+
+Vi du ingest:
+
+```bash
+curl -X POST http://127.0.0.1:8000/ingest ^
+  -F "file=@document.pdf" ^
+  -F "collection_name=rag_collection_demo"
+```
+
+Vi du query:
+
+```bash
+curl -X POST http://127.0.0.1:8000/collections/rag_collection_demo/query ^
+  -H "Content-Type: application/json" ^
+  -d "{\"query\": \"Tom tat tai lieu\", \"number_docs_retrieval\": 3}"
+```
+

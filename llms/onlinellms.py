@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Generator
 import backoff
 from google import genai
 from google.genai import types
+
+from API_RAG_NEW.concurrency import acquire_llm_slot
 
 from .base import LLM
 
@@ -46,21 +49,22 @@ class OnlineLLMs(LLM):
             raise ValueError("Gemini client is not initialized.")
         try:
             messages = self.parse_message(messages)
-            response = self.client.models.generate_content(
-                model=self.model_version,
-                contents=[
-                    {"role": "user", "parts": system_prompt},
-                    {
-                        "role": "model",
-                        "parts": "I understand. I will strictly follow your instruction!",
-                    },
-                    *messages,
-                ],
-                config=types.GenerateContentConfig(
-                    max_output_tokens=max_tokens,
-                    temperature=temperature,
-                ),
-            )
+            with acquire_llm_slot():
+                response = self.client.models.generate_content(
+                    model=self.model_version,
+                    contents=[
+                        {"role": "user", "parts": system_prompt},
+                        {
+                            "role": "model",
+                            "parts": "I understand. I will strictly follow your instruction!",
+                        },
+                        *messages,
+                    ],
+                    config=types.GenerateContentConfig(
+                        max_output_tokens=max_tokens,
+                        temperature=temperature,
+                    ),
+                )
             return response.text
         except Exception as e:
             print(f"Error occurred: {e}, retrying...")
@@ -75,12 +79,31 @@ class OnlineLLMs(LLM):
         if self.name != GEMINI_PROVIDER:
             raise ValueError(f"Unknown model name: {self.name}")
 
-        response = self.client.models.generate_content(
-            model=self.model_version,
-            contents=prompt,
-        )
+        with acquire_llm_slot():
+            response = self.client.models.generate_content(
+                model=self.model_version,
+                contents=prompt,
+            )
         # New SDK exposes a helper that returns the concatenated text.
         content = response.text
         if not isinstance(content, str):
             content = str(content)
         return content
+
+    def generate_content_stream(self, prompt: str) -> Generator[str, None, None]:
+        """Sync generator: yield từng đoạn text khi LLM trả về."""
+        if not self.client:
+            raise ValueError(
+                "Client is not set. Please initialize Gemini client or call set_model()."
+            )
+        if self.name != GEMINI_PROVIDER:
+            raise ValueError(f"Unknown model name: {self.name}")
+
+        with acquire_llm_slot():
+            for chunk in self.client.models.generate_content_stream(
+                model=self.model_version,
+                contents=prompt,
+            ):
+                text = getattr(chunk, "text", None)
+                if text:
+                    yield text
