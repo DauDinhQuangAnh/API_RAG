@@ -127,3 +127,8 @@ class ProductSuggestion(BaseModel):
 class ProductSuggestionResponse(BaseModel):
     product_id: str
     suggestions: list[ProductSuggestion]
+
+
+class ExtractResponse(BaseModel):
+    kind: str
+    fields: dict[str, Any]

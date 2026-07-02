@@ -19,6 +19,7 @@ from API_RAG_NEW.schemas import (
     CompanyRecommendationResponse,
     DirectChatRequest,
     DirectChatResponse,
+    ExtractResponse,
     IngestResponse,
     ProductSuggestionRequest,
     ProductSuggestionResponse,
@@ -217,6 +218,27 @@ def update_collection(
 )
 def delete_collection(collection_name: str) -> dict[str, str]:
     return _delete_collection_for_provider(LOCAL_PROVIDER, collection_name)
+
+
+@app.post(
+    "/extract",
+    response_model=ExtractResponse,
+    dependencies=[Depends(require_internal_api_key)],
+)
+async def extract_document(
+    file: UploadFile = File(...),
+    kind: str = Form("other"),
+    language: str = Form("vi"),
+) -> ExtractResponse:
+    raw = await file.read()
+    fields = services.extract_document_fields(
+        file.filename or "document",
+        raw,
+        file.content_type,
+        kind,
+        language,
+    )
+    return ExtractResponse(kind=kind, fields=fields)
 
 
 @app.post(
