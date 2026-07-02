@@ -6,6 +6,7 @@ from fastapi.responses import StreamingResponse
 
 from API_RAG_NEW import services
 from API_RAG_NEW.concurrency import acquire_ingest_slot, acquire_query_slot
+from API_RAG_NEW.extract_service import extract_document
 from API_RAG_NEW.config import ALLOWED_ORIGINS, ROOT_PATH
 from API_RAG_NEW.security import require_internal_api_key
 from API_RAG_NEW.schemas import (
@@ -415,3 +416,27 @@ def query_local_collection_stream(
     req: QueryRequest,
 ) -> StreamingResponse:
     return _stream_query_for_provider(LOCAL_PROVIDER, collection_name, req)
+
+
+@app.post("/extract")
+async def extract_fields(
+    file: UploadFile = File(...),
+    kind: str = Form(default="other"),
+    language: str = Form(default="vi"),
+) -> dict:
+    """
+    Read a document (PDF, image, XLSX, CSV, TXT…) and extract structured
+    fields using Gemini — raw prompt only, no RAG ingestion.
+    Returns: { "fields": { field_name: value, … } }
+    """
+    raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+    fields = extract_document(
+        filename=file.filename or "document",
+        file_bytes=raw,
+        kind=kind,
+        language=language,
+        content_type=file.content_type,
+    )
+    return {"fields": fields}
