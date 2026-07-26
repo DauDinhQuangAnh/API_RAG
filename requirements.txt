@@ -8,6 +8,7 @@ transformers
 torch
 pdfplumber
 python-docx
+openpyxl
 backoff
 nltk
 python-dotenv

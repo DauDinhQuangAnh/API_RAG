@@ -12,6 +12,7 @@ from typing import Any
 
 from fastapi import HTTPException
 from docx import Document
+from openpyxl import load_workbook
 import pdfplumber
 
 from chunking import ProtonxSemanticChunker
@@ -65,10 +66,10 @@ def ingest_file_content(
     runtime = _runtime_for_provider(provider)
     effective_chunking_profile = resolve_chunking_profile(chunking_profile)
     extension = os.path.splitext(file_name)[1].casefold()
-    if extension not in {".docx", ".pdf", ".txt", ".text"}:
+    if extension not in {".docx", ".pdf", ".txt", ".text", ".xlsx"}:
         raise HTTPException(
             status_code=400,
-            detail="Only DOCX, PDF, TXT, and TEXT files are supported.",
+            detail="Only DOCX, PDF, TXT, TEXT, and XLSX files are supported.",
         )
 
     final_collection_name = _resolve_collection_name(file_name, requested_collection_name)
@@ -387,6 +388,8 @@ def _extract_non_pdf_document_text(
     try:
         if extension == ".docx":
             return _extract_docx_text(raw_content)
+        if extension == ".xlsx":
+            return _extract_xlsx_text(raw_content)
         if extension in {".txt", ".text"}:
             return _decode_text_file(raw_content)
     except HTTPException:
@@ -497,6 +500,27 @@ def _extract_docx_text(raw_content: bytes) -> str:
                 blocks.append(" | ".join(cells))
 
     return "\n\n".join(block for block in blocks if block)
+
+
+def _extract_xlsx_text(raw_content: bytes) -> str:
+    workbook = load_workbook(io.BytesIO(raw_content), data_only=True, read_only=True)
+    try:
+        blocks: list[str] = []
+        for sheet in workbook.worksheets:
+            rows: list[str] = []
+            for row in sheet.iter_rows(values_only=True):
+                cells = [
+                    str(cell).strip()
+                    for cell in row
+                    if cell is not None and str(cell).strip()
+                ]
+                if cells:
+                    rows.append(" | ".join(cells))
+            if rows:
+                blocks.append(f"[Sheet: {sheet.title}]\n" + "\n".join(rows))
+        return "\n\n".join(blocks)
+    finally:
+        workbook.close()
 
 
 def _decode_text_file(raw_content: bytes) -> str:

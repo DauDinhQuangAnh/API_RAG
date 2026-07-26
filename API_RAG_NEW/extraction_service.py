@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import io
 import json
+import os
 import re
 from typing import Any
 
 from fastapi import HTTPException
 from google.genai import types
+from openpyxl import load_workbook
 
 from API_RAG_NEW.concurrency import acquire_llm_slot
 from API_RAG_NEW.config import GEMINI_MODEL, get_gemini_api_key
@@ -20,6 +23,8 @@ MULTIMODAL_MIME_TYPES = {
     "image/gif",
     "image/tiff",
 }
+
+SPREADSHEET_EXTENSIONS = {".xlsx"}
 
 KIND_FIELD_HINTS: dict[str, str] = {
     "electricity_bill": "supplier, period_start, period_end, kwh_total, amount_vnd, tax_vnd, meter_number",
@@ -82,6 +87,27 @@ def _parse_json(text: str) -> dict[str, Any]:
         return {}
 
 
+def _extract_xlsx_text(raw_bytes: bytes) -> str:
+    workbook = load_workbook(io.BytesIO(raw_bytes), data_only=True, read_only=True)
+    try:
+        blocks: list[str] = []
+        for sheet in workbook.worksheets:
+            rows: list[str] = []
+            for row in sheet.iter_rows(values_only=True):
+                cells = [
+                    str(cell).strip()
+                    for cell in row
+                    if cell is not None and str(cell).strip()
+                ]
+                if cells:
+                    rows.append(" | ".join(cells))
+            if rows:
+                blocks.append(f"[Sheet: {sheet.title}]\n" + "\n".join(rows))
+        return "\n\n".join(blocks)
+    finally:
+        workbook.close()
+
+
 def extract_document_fields(
     filename: str,
     raw_bytes: bytes,
@@ -92,6 +118,7 @@ def extract_document_fields(
     llm = _build_llm()
     prompt_text = _build_prompt(kind, language)
     effective_mime = (mime_type or "").lower().split(";")[0].strip()
+    extension = os.path.splitext(filename)[1].casefold()
 
     try:
         if effective_mime in MULTIMODAL_MIME_TYPES and raw_bytes:
@@ -105,6 +132,10 @@ def extract_document_fields(
                     contents=contents,
                 )
             raw_text = response.text or ""
+        elif extension in SPREADSHEET_EXTENSIONS and raw_bytes:
+            file_text = _extract_xlsx_text(raw_bytes)[:8000]
+            combined = f"Nội dung file ({filename}):\n{file_text}\n\n{prompt_text}"
+            raw_text = llm.generate_content(combined)
         else:
             try:
                 file_text = raw_bytes.decode("utf-8", errors="replace")[:8000]
