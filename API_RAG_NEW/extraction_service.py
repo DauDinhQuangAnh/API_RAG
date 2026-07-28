@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import io
 import json
+import logging
 import os
 import re
 from typing import Any
@@ -13,6 +14,8 @@ from openpyxl import load_workbook
 from API_RAG_NEW.concurrency import acquire_llm_slot
 from API_RAG_NEW.config import GEMINI_MODEL, get_gemini_api_key
 from llms.onlinellms import OnlineLLMs
+
+logger = logging.getLogger(__name__)
 
 MULTIMODAL_MIME_TYPES = {
     "application/pdf",
@@ -120,8 +123,15 @@ def extract_document_fields(
     effective_mime = (mime_type or "").lower().split(";")[0].strip()
     extension = os.path.splitext(filename)[1].casefold()
 
+    logger.info(
+        "[extract] start filename=%r kind=%s mime=%r ext=%s bytes=%d model=%s",
+        filename, kind, effective_mime, extension, len(raw_bytes or b""),
+        llm.model_version,
+    )
+
     try:
         if effective_mime in MULTIMODAL_MIME_TYPES and raw_bytes:
+            branch = "multimodal"
             contents = [
                 types.Part.from_bytes(data=raw_bytes, mime_type=effective_mime),
                 types.Part.from_text(text=prompt_text),
@@ -133,22 +143,53 @@ def extract_document_fields(
                 )
             raw_text = response.text or ""
         elif extension in SPREADSHEET_EXTENSIONS and raw_bytes:
+            branch = "xlsx"
             file_text = _extract_xlsx_text(raw_bytes)[:8000]
+            logger.info("[extract] xlsx text_chars=%d", len(file_text))
             combined = f"Nội dung file ({filename}):\n{file_text}\n\n{prompt_text}"
             raw_text = llm.generate_content(combined)
         else:
+            branch = "text"
             try:
                 file_text = raw_bytes.decode("utf-8", errors="replace")[:8000]
             except Exception:
                 file_text = ""
+            logger.info(
+                "[extract] text branch mime=%r ext=%s decoded_chars=%d "
+                "(no multimodal/xlsx match — binary files land here and usually yield nothing)",
+                effective_mime, extension, len(file_text),
+            )
             combined = f"Nội dung file ({filename}):\n{file_text}\n\n{prompt_text}"
             raw_text = llm.generate_content(combined)
 
-        return _parse_json(raw_text)
+        fields = _parse_json(raw_text)
+        raw_len = len(raw_text or "")
+        if not raw_text.strip():
+            logger.warning(
+                "[extract] EMPTY model output filename=%r branch=%s — Gemini returned "
+                "nothing (check API key/quota/model name/safety-block)",
+                filename, branch,
+            )
+        elif not fields:
+            logger.warning(
+                "[extract] NO FIELDS parsed filename=%r branch=%s raw_len=%d "
+                "raw_preview=%r — model replied but no JSON object found",
+                filename, branch, raw_len, (raw_text or "")[:300],
+            )
+        else:
+            logger.info(
+                "[extract] ok filename=%r branch=%s raw_len=%d fields=%d keys=%s",
+                filename, branch, raw_len, len(fields), list(fields.keys())[:20],
+            )
+        return fields
 
     except HTTPException:
         raise
     except Exception as exc:
+        logger.exception(
+            "[extract] FAILED filename=%r kind=%s mime=%r ext=%s: %s",
+            filename, kind, effective_mime, extension, exc,
+        )
         raise HTTPException(
             status_code=502, detail=f"AI extraction failed: {exc}"
         ) from exc
