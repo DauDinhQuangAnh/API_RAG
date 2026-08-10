@@ -1,8 +1,29 @@
-# RAG API
+# WeaveCarbon — RAG Service
 
-Tai lieu nay chi ghi cac thong tin can thiet de chay local. Khong commit file `.env`, API key, du lieu nguoi dung, file upload mau, log runtime, hoac noi dung collection len repo.
+A **FastAPI** retrieval-augmented-generation service that gives WeaveCarbon its
+compliance intelligence: it ingests export-market and regulatory documents into a
+vector store and answers questions / generates recommendations **grounded in that
+corpus with citations**, rather than free-form LLM guesses.
 
-## Chay local
+> Do **not** commit `.env`, API keys, user data, sample uploads, runtime logs, or
+> collection contents.
+
+## Role in the platform
+
+The main API (`BE_weavecarbon`) calls this service to:
+
+- answer compliance questions over ingested market-requirement documents;
+- generate **company** and **product** recommendations grounded in that corpus;
+- keep answers auditable via citations back to the source chunks.
+
+## How it works
+
+Ingest → **semantic chunking** → **embeddings** (local SBERT or an online
+provider) → vector store (Chroma). Query → retrieve → **rerank** → LLM answer with
+citations. Ingest and query run under bounded concurrency slots; internal
+endpoints are protected by an API key.
+
+## Run locally
 
 ```bash
 python -m venv .venv
@@ -10,50 +31,37 @@ python -m venv .venv
 pip install -r requirements.txt
 uvicorn API_RAG_NEW.main:app --host 0.0.0.0 --port 8000
 ```
-ngrok http 8000
 
-Hoac dung Python portable trong repo neu co:
+Or the portable Python bundled in the repo, if present:
 
 ```bash
 .\python\python.exe -m uvicorn API_RAG_NEW.main:app --host 0.0.0.0 --port 8000
 ```
 
-Base URL mac dinh: `http://127.0.0.1:8000`
+Default base URL: `http://127.0.0.1:8000` (expose with `ngrok http 8000`).
 
-## Cau hinh
+## Configuration
 
-Tao file `.env` tu `.env.example`, sau do dien gia tri phu hop cho moi truong local. File `.env` chua secret nen khong duoc commit.
+Copy `.env.example` to `.env` and fill in local values — `.env` holds secrets and
+must not be committed. Common settings: LLM model, Chroma DB path, number of
+chunks retrieved, chunking profile, CORS origins. `GET /runtime-config` returns
+only non-secret runtime config.
 
-Mot so cau hinh thuong dung:
+## Main API
 
-- model LLM
-- duong dan Chroma DB
-- so luong chunk truy xuat
-- che do chunking
-- CORS origins cho local/dev
+- `GET /health` — server check
+- `GET /runtime-config` — safe (non-secret) runtime config
+- `POST /chat/gemini` — direct chat
+- `POST /recommendations/company/{id}` · `POST /recommendations/product/{id}`
+- `GET /collections` · `POST /collections` — list / create
+- `GET|PATCH|DELETE /collections/{name}` — inspect / update / delete
+- `GET /collections/{name}/records` — records in a collection
+- `POST /ingest` — ingest a document (PDF / DOCX / TXT)
+- `POST /collections/{name}/query` — RAG Q&A over a collection
 
-Endpoint `/runtime-config` chi tra ve cau hinh runtime khong chua secret.
+### Examples
 
-## API chinh
-
-- `GET /health`: kiem tra server.
-- `GET /runtime-config`: xem cau hinh runtime an toan.
-- `GET /collections`: lay danh sach collections.
-- `POST /collections`: tao collection.
-- `GET /collections/{collection_name}`: xem thong tin collection.
-- `PATCH /collections/{collection_name}`: cap nhat thong tin collection.
-- `DELETE /collections/{collection_name}`: xoa collection.
-- `GET /collections/{collection_name}/records`: xem records trong collection.
-- `POST /ingest`: ingest file tai lieu.
-- `POST /collections/{collection_name}/query`: hoi dap RAG tren collection.
-
-## File ho tro ingest
-
-- PDF
-- DOCX
-- TXT/TEXT
-
-Vi du ingest:
+Ingest:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/ingest ^
@@ -61,11 +69,10 @@ curl -X POST http://127.0.0.1:8000/ingest ^
   -F "collection_name=rag_collection_demo"
 ```
 
-Vi du query:
+Query:
 
 ```bash
 curl -X POST http://127.0.0.1:8000/collections/rag_collection_demo/query ^
   -H "Content-Type: application/json" ^
   -d "{\"query\": \"Tom tat tai lieu\", \"number_docs_retrieval\": 3}"
 ```
-
