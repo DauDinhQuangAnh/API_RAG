@@ -82,6 +82,18 @@ _KIND_PROMPTS: dict[str, str] = {
 - total_amount_usd: tổng giá trị (USD — nếu có)
 - weight_kg: trọng lượng (kg — nếu có)
 """,
+    "garment": """
+Đây là ảnh chụp một hoặc nhiều món quần áo / phụ kiện thời trang được đem quyên góp.
+Hãy nhận diện TỪNG món nhìn thấy rõ và trả về JSON đúng dạng:
+{ "items": [ { "name": "...", "item_type": "...", "material": "...", "weight_kg": 0.0, "condition": "..." } ] }
+Trong đó:
+- name: tên ngắn gọn của món (ví dụ "Áo thun cotton", "Quần jeans")
+- item_type: một trong shirt | pants | jacket | dress | bag | shoes | other
+- material: chất liệu chính, một trong cotton | polyester | wool | silk | linen | nylon | denim | leather | other
+- weight_kg: ước tính khối lượng theo kg (số thực, ví dụ 0.25)
+- condition: tình trạng, một trong good | fair | poor
+Chỉ liệt kê các món nhìn thấy rõ trong ảnh. Nếu không chắc chất liệu, dùng "other".
+""",
 }
 
 _DEFAULT_PROMPT = """
