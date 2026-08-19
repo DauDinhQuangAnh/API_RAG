@@ -55,6 +55,7 @@ jobs:
         run: python -m compileall API_RAG_NEW chunking llms *.py
 
       - name: Configure SSH
+        id: ssh
         if: steps.deploy_secrets.outputs.missing == '0'
         shell: bash
         run: |
@@ -63,11 +64,22 @@ jobs:
           chmod 700 ~/.ssh
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
-          chmod 644 ~/.ssh/known_hosts
+          DEPLOY_PORT="${DEPLOY_PORT:-22}"
+          if ssh-keyscan -H -p "$DEPLOY_PORT" "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/tmp/keyscan.log && [ -s ~/.ssh/known_hosts ]; then
+            chmod 644 ~/.ssh/known_hosts
+            echo "reachable=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning title=VPS unreachable::Could not fetch host key from ${DEPLOY_HOST}:${DEPLOY_PORT} — skipping deploy. Check DEPLOY_HOST/DEPLOY_PORT and that the VPS SSH port is reachable from GitHub Actions."
+            cat /tmp/keyscan.log || true
+            echo "reachable=0" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip deploy — VPS unreachable
+        if: steps.deploy_secrets.outputs.missing == '0' && steps.ssh.outputs.reachable != '1'
+        run: echo "VPS deploy was skipped because the host was not reachable over SSH."
 
       - name: Deploy on VPS
-        if: steps.deploy_secrets.outputs.missing == '0'
+        if: steps.deploy_secrets.outputs.missing == '0' && steps.ssh.outputs.reachable == '1'
         shell: bash
         run: |
           set -euo pipefail
