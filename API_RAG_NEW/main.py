@@ -6,7 +6,6 @@ from fastapi.responses import StreamingResponse
 
 from API_RAG_NEW import services
 from API_RAG_NEW.concurrency import acquire_ingest_slot, acquire_query_slot
-from API_RAG_NEW.extract_service import extract_document
 from API_RAG_NEW.config import ALLOWED_ORIGINS, ROOT_PATH
 from API_RAG_NEW.security import require_internal_api_key
 from API_RAG_NEW.schemas import (
@@ -225,12 +224,14 @@ def delete_collection(collection_name: str) -> dict[str, str]:
     response_model=ExtractResponse,
     dependencies=[Depends(require_internal_api_key)],
 )
-async def extract_document(
+async def handle_extract_document(
     file: UploadFile = File(...),
     kind: str = Form("other"),
     language: str = Form("vi"),
 ) -> ExtractResponse:
     raw = await file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
     fields = services.extract_document_fields(
         file.filename or "document",
         raw,
@@ -440,25 +441,3 @@ def query_local_collection_stream(
     return _stream_query_for_provider(LOCAL_PROVIDER, collection_name, req)
 
 
-@app.post("/extract")
-async def extract_fields(
-    file: UploadFile = File(...),
-    kind: str = Form(default="other"),
-    language: str = Form(default="vi"),
-) -> dict:
-    """
-    Read a document (PDF, image, XLSX, CSV, TXT…) and extract structured
-    fields using Gemini — raw prompt only, no RAG ingestion.
-    Returns: { "fields": { field_name: value, … } }
-    """
-    raw = await file.read()
-    if not raw:
-        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
-    fields = extract_document(
-        filename=file.filename or "document",
-        file_bytes=raw,
-        kind=kind,
-        language=language,
-        content_type=file.content_type,
-    )
-    return {"fields": fields}
