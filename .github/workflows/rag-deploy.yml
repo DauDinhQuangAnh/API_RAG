@@ -106,5 +106,5 @@ jobs:
           git checkout main
           git pull --ff-only origin main
           cd /opt/weavecarbon/FE
-          bash deploy/redeploy-vps.sh
+          bash deploy/redeploy-vps.sh --rag-only
           EOF
