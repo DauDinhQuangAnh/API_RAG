@@ -5,13 +5,15 @@ from dataclasses import dataclass
 from typing import Literal
 
 import chromadb
-from dotenv import load_dotenv
 
 from API_RAG_NEW.embeddings import LocalSentenceTransformerEmbeddings
+from API_RAG_NEW.runtime_settings import (
+    RAG_INTERNAL_API_KEY,
+    RAG_REQUIRE_INTERNAL_API_KEY,
+    get_bool_env,
+    parse_cors_origins,
+)
 from download_model import PRIMARY_MODEL_NAME, ensure_embedding_model
-
-
-load_dotenv()
 
 
 LOCAL_EMBEDDING_PROVIDER = "local_sbert"
@@ -28,14 +30,6 @@ class EmbeddingRuntime:
     embedding_model: object
     chroma_client: chromadb.PersistentClient
     chroma_db_path: str
-
-
-def parse_cors_origins(raw_value: str | None) -> list[str]:
-    if not raw_value:
-        return ["http://localhost:3000", "http://localhost:8080"]
-
-    origins = [item.strip() for item in raw_value.split(",") if item.strip()]
-    return origins or ["http://localhost:3000", "http://localhost:8080"]
 
 
 def get_int_env(name: str, default: int) -> int:
@@ -62,19 +56,6 @@ def get_float_env(name: str, default: float) -> float:
     return value
 
 
-def get_bool_env(name: str, default: bool) -> bool:
-    raw_value = os.getenv(name)
-    if raw_value is None:
-        return default
-
-    normalized = raw_value.strip().casefold()
-    if normalized in {"1", "true", "yes", "y", "on"}:
-        return True
-    if normalized in {"0", "false", "no", "n", "off"}:
-        return False
-    return default
-
-
 def get_choice_env(name: str, default: str, supported_values: set[str]) -> str:
     raw_value = os.getenv(name, default)
     normalized = str(raw_value).strip().casefold()
@@ -98,8 +79,6 @@ RAG_MAX_CONTEXT_EXPANSION_PER_CANDIDATE = max(
 RAG_MAX_TOTAL_CANDIDATES = max(1, get_int_env("RAG_MAX_TOTAL_CANDIDATES", 40))
 RAG_ENABLE_DISTANCE_GUARD = get_bool_env("RAG_ENABLE_DISTANCE_GUARD", False)
 RAG_MAX_DISTANCE = get_optional_float_env("RAG_MAX_DISTANCE")
-RAG_INTERNAL_API_KEY = os.getenv("RAG_INTERNAL_API_KEY") or None
-RAG_REQUIRE_INTERNAL_API_KEY = get_bool_env("RAG_REQUIRE_INTERNAL_API_KEY", False)
 RAG_MAX_CONCURRENT_QUERIES = max(1, get_int_env("RAG_MAX_CONCURRENT_QUERIES", 32))
 RAG_MAX_CONCURRENT_LLM_CALLS = max(1, get_int_env("RAG_MAX_CONCURRENT_LLM_CALLS", 16))
 RAG_MAX_CONCURRENT_INGESTS = max(1, get_int_env("RAG_MAX_CONCURRENT_INGESTS", 6))

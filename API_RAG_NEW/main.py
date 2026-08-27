@@ -45,7 +45,11 @@ def health() -> dict[str, object]:
     return services.health_payload()
 
 
-@app.post("/chat/gemini", response_model=DirectChatResponse)
+@app.post(
+    "/chat/gemini",
+    response_model=DirectChatResponse,
+    dependencies=[Depends(require_internal_api_key)],
+)
 def chat_with_gemini(req: DirectChatRequest) -> DirectChatResponse:
     return services.chat_with_gemini(req)
 
@@ -53,6 +57,7 @@ def chat_with_gemini(req: DirectChatRequest) -> DirectChatResponse:
 @app.post(
     "/recommendations/company/{company_id}",
     response_model=CompanyRecommendationResponse,
+    dependencies=[Depends(require_internal_api_key)],
 )
 def generate_company_recommendations(
     company_id: str,
@@ -64,6 +69,7 @@ def generate_company_recommendations(
 @app.post(
     "/recommendations/product/{product_id}",
     response_model=ProductSuggestionResponse,
+    dependencies=[Depends(require_internal_api_key)],
 )
 def generate_product_suggestions(
     product_id: str,

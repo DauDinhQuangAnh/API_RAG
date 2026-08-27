@@ -4,7 +4,10 @@ import hmac
 
 from fastapi import Header, HTTPException
 
-from API_RAG_NEW.config import RAG_INTERNAL_API_KEY, RAG_REQUIRE_INTERNAL_API_KEY
+from API_RAG_NEW.runtime_settings import (
+    RAG_INTERNAL_API_KEY,
+    RAG_REQUIRE_INTERNAL_API_KEY,
+)
 
 
 def require_internal_api_key(
@@ -16,7 +19,7 @@ def require_internal_api_key(
     if not RAG_INTERNAL_API_KEY:
         if RAG_REQUIRE_INTERNAL_API_KEY:
             raise HTTPException(
-                status_code=500,
+                status_code=503,
                 detail=(
                     "RAG_INTERNAL_API_KEY must be configured when "
                     "RAG_REQUIRE_INTERNAL_API_KEY=true."

@@ -11,7 +11,29 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install test dependencies
+        run: python -m pip install pytest fastapi python-dotenv
+
+      - name: Syntax check
+        run: python -m compileall API_RAG_NEW chunking llms *.py
+
+      - name: Security tests
+        run: python -m pytest -q
+
   deploy:
+    needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production
@@ -39,20 +61,6 @@ jobs:
       - name: Skip deploy until secrets are configured
         if: steps.deploy_secrets.outputs.missing != '0'
         run: echo "Skipping deploy because DEPLOY_* GitHub secrets are not configured yet."
-
-      - name: Checkout
-        if: steps.deploy_secrets.outputs.missing == '0'
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        if: steps.deploy_secrets.outputs.missing == '0'
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Syntax check
-        if: steps.deploy_secrets.outputs.missing == '0'
-        run: python -m compileall API_RAG_NEW chunking llms *.py
 
       - name: Configure SSH
         id: ssh

@@ -80,7 +80,7 @@ Non-secret/configuration:
 - Behavior/debug: `RAG_ENABLE_FINAL_ANSWER_FALLBACK`, `RAG_DEBUG_MODE`, `RAG_EMBEDDING_CACHE_SIZE`, `RAG_REQUIRE_INTERNAL_API_KEY`
 - PostgreSQL: `DB_HOST`, `DB_PORT`, `DB_NAME`, `DB_USER`
 
-`.env.example` omits the internal-auth variables, PostgreSQL variables and several configuration values referenced by code. This is documentation/configuration drift.
+`.env.example` includes the internal key only as an optional commented placeholder, but omits the strict-mode flag, PostgreSQL variables and several configuration values referenced by code. This is documentation/configuration drift.
 
 ## Dependency state
 
