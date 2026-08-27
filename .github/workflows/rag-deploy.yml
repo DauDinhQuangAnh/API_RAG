@@ -58,9 +58,11 @@ jobs:
           done
           echo "missing=$missing" >> "$GITHUB_OUTPUT"
 
-      - name: Skip deploy until secrets are configured
+      - name: Fail when deploy secrets are missing
         if: steps.deploy_secrets.outputs.missing != '0'
-        run: echo "Skipping deploy because DEPLOY_* GitHub secrets are not configured yet."
+        run: |
+          echo "::error title=Missing deploy secrets::Configure DEPLOY_HOST, DEPLOY_USER and DEPLOY_SSH_KEY for the production environment."
+          exit 1
 
       - name: Configure SSH
         id: ssh
@@ -72,19 +74,19 @@ jobs:
           chmod 700 ~/.ssh
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
+          if ! ssh-keygen -y -f ~/.ssh/id_ed25519 >/dev/null 2>&1; then
+            echo "::error title=Invalid SSH key::DEPLOY_SSH_KEY is not a valid OpenSSH private key."
+            exit 1
+          fi
           DEPLOY_PORT="${DEPLOY_PORT:-22}"
           if ssh-keyscan -H -p "$DEPLOY_PORT" "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/tmp/keyscan.log && [ -s ~/.ssh/known_hosts ]; then
             chmod 644 ~/.ssh/known_hosts
             echo "reachable=1" >> "$GITHUB_OUTPUT"
           else
-            echo "::warning title=VPS unreachable::Could not fetch host key from ${DEPLOY_HOST}:${DEPLOY_PORT} — skipping deploy. Check DEPLOY_HOST/DEPLOY_PORT and that the VPS SSH port is reachable from GitHub Actions."
+            echo "::error title=VPS unreachable::Could not fetch host key from ${DEPLOY_HOST}:${DEPLOY_PORT}. Check DEPLOY_HOST/DEPLOY_PORT and that the VPS SSH port is reachable from GitHub Actions."
             cat /tmp/keyscan.log || true
-            echo "reachable=0" >> "$GITHUB_OUTPUT"
+            exit 1
           fi
-
-      - name: Skip deploy — VPS unreachable
-        if: steps.deploy_secrets.outputs.missing == '0' && steps.ssh.outputs.reachable != '1'
-        run: echo "VPS deploy was skipped because the host was not reachable over SSH."
 
       - name: Deploy on VPS
         if: steps.deploy_secrets.outputs.missing == '0' && steps.ssh.outputs.reachable == '1'
