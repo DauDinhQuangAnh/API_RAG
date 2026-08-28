@@ -39,6 +39,11 @@ htmlcov/
 .coverage
 .coverage.*
 .cache
+.ruff_cache/
+artifacts/
+uploads/
+backups/
+restore-drills/
 nosetests.xml
 coverage.xml
 *.cover
