@@ -2,15 +2,50 @@ name: RAG Deploy VPS
 
 on:
   workflow_dispatch:
+  pull_request:
   push:
     branches:
       - main
 
 concurrency:
-  group: production-deploy
+  group: rag-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  packages: write
+
 jobs:
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout full history for secret scanning
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect committed secrets
+        uses: gitleaks/gitleaks-action@v2
+
+      - name: Scan source and locks
+        uses: aquasecurity/trivy-action@0.31.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: table
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
+      - name: Generate source SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: rag-source-sbom.spdx.json
+          artifact-name: rag-source-sbom-${{ github.run_id }}.spdx.json
+
   verify:
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -76,11 +111,31 @@ jobs:
           docker build --tag weavecarbon-rag:m3 .
           docker run --rm weavecarbon-rag:m3 python -m pip check
 
+      - name: Scan runtime image
+        uses: aquasecurity/trivy-action@0.31.0
+        with:
+          image-ref: weavecarbon-rag:m3
+          format: table
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
+      - name: Generate container SBOM evidence
+        uses: anchore/sbom-action@v0
+        with:
+          image: weavecarbon-rag:m3
+          format: spdx-json
+          output-file: rag-sbom.spdx.json
+          artifact-name: rag-sbom-${{ github.run_id }}.spdx.json
+
       - name: Measure image, cold start and idle memory
         shell: bash
         run: |
           set -euo pipefail
           image_bytes="$(docker image inspect weavecarbon-rag:m3 --format '{{.Size}}')"
+          runtime_user="$(docker image inspect weavecarbon-rag:m3 --format '{{.Config.User}}')"
+          test -n "$runtime_user" && test "$runtime_user" != '0' && test "$runtime_user" != 'root'
+          test "$image_bytes" -le 2306867200
           started_ms="$(date +%s%3N)"
           docker run --detach --name rag-m3 \
             --env RAG_INTERNAL_API_KEY=ci-internal-key \
@@ -109,20 +164,98 @@ jobs:
             echo "- Image bytes: ${image_bytes}"
             echo "- Cold start to first health response: ${cold_start_ms} ms"
             echo "- Idle memory: ${memory_usage}"
+            echo "- Runtime user: ${runtime_user}"
           } | tee -a "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    needs:
+      - security
+      - verify
+      - container
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    if: github.event_name != 'pull_request'
+    outputs:
+      image: ${{ steps.image.outputs.name }}
+      digest: ${{ steps.build.outputs.digest }}
+      sha: ${{ steps.release.outputs.sha }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve image and source
+        id: image
+        shell: bash
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve release
+        id: release
+        shell: bash
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build and push immutable RAG image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          pull: true
+          tags: |
+            ${{ steps.image.outputs.name }}:sha-${{ steps.release.outputs.sha }}
+            ${{ steps.image.outputs.name }}:main
+            ${{ steps.image.outputs.name }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: mode=max
+          sbom: true
+
+      - name: Scan immutable RAG image
+        uses: aquasecurity/trivy-action@0.31.0
+        with:
+          image-ref: ${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}
+          format: table
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+
+      - name: Record release evidence
+        shell: bash
+        run: |
+          {
+            echo '### RAG immutable release'
+            echo
+            echo '- Source: `${{ steps.release.outputs.sha }}`'
+            echo '- Image: `${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}`'
+            echo '- SBOM and provenance: attached OCI attestations'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   deploy:
     needs:
       - verify
       - container
+      - publish
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    if: github.event_name != 'pull_request'
     environment: production
     env:
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
       DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      GHCR_USERNAME: ${{ github.actor }}
+      GHCR_TOKEN: ${{ github.token }}
 
     steps:
       - name: Check deploy secrets
@@ -175,8 +308,13 @@ jobs:
         run: |
           set -euo pipefail
           DEPLOY_PORT="${DEPLOY_PORT:-22}"
-          ssh -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" <<'EOF'
+          REMOTE_RAG_IMAGE="${{ needs.publish.outputs.image }}@${{ needs.publish.outputs.digest }}"
+          GHCR_TOKEN_B64="$(printf '%s' "${GHCR_TOKEN:-}" | base64 -w0)"
+          ssh -T -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "RAG_IMAGE='$REMOTE_RAG_IMAGE' GHCR_USERNAME='$GHCR_USERNAME' GHCR_TOKEN_B64='$GHCR_TOKEN_B64' bash --noprofile --norc -se" <<'EOF'
           set -euo pipefail
+          GHCR_TOKEN="$(printf '%s' "$GHCR_TOKEN_B64" | base64 -d)"
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
           cd /opt/weavecarbon/FE
           git checkout main
           git pull --ff-only origin main
@@ -187,5 +325,21 @@ jobs:
           git checkout main
           git pull --ff-only origin main
           cd /opt/weavecarbon/FE
-          bash deploy/redeploy-vps.sh --rag-only
+          PREVIOUS_RAG_IMAGE="$(grep '^RAG_IMAGE=' .env.vps | cut -d= -f2- || true)"
+          if grep -q '^RAG_IMAGE=' .env.vps; then
+            sed -i "s|^RAG_IMAGE=.*|RAG_IMAGE=${RAG_IMAGE}|" .env.vps
+          else
+            printf 'RAG_IMAGE=%s\n' "$RAG_IMAGE" >> .env.vps
+          fi
+          export RAG_IMAGE
+          if ! bash deploy/redeploy-vps.sh --rag-only; then
+            echo "[deploy] RAG smoke failed; restoring previous immutable image."
+            if [ -n "$PREVIOUS_RAG_IMAGE" ]; then
+              sed -i "s|^RAG_IMAGE=.*|RAG_IMAGE=${PREVIOUS_RAG_IMAGE}|" .env.vps
+              export RAG_IMAGE="$PREVIOUS_RAG_IMAGE"
+              bash deploy/redeploy-vps.sh --rag-only
+            fi
+            exit 1
+          fi
+          printf '%s rag %s %s\n' "$(date -u +%FT%TZ)" '${{ needs.publish.outputs.sha }}' "$RAG_IMAGE" >> .deploy-history
           EOF

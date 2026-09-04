@@ -48,7 +48,7 @@ def test_every_non_health_api_route_requires_internal_auth() -> None:
 
             discovered_routes += 1
             path = ast.literal_eval(decorator.args[0])
-            if path == "/health":
+            if path in {"/health", "/ready"}:
                 continue
 
             dependencies = next(

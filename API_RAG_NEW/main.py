@@ -1,12 +1,15 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 
 from API_RAG_NEW import services
 from API_RAG_NEW.concurrency import acquire_ingest_slot, acquire_query_slot
-from API_RAG_NEW.config import ALLOWED_ORIGINS, ROOT_PATH
+from API_RAG_NEW.config import ALLOWED_ORIGINS, CHROMA_DB_PATH_LOCAL, ROOT_PATH, check_chroma_connectivity
+from API_RAG_NEW.operations import operational_middleware, render_metrics
 from API_RAG_NEW.security import require_internal_api_key
 from API_RAG_NEW.schemas import (
     CollectionCreateRequest,
@@ -27,7 +30,17 @@ from API_RAG_NEW.schemas import (
 )
 
 
-app = FastAPI(title="RAG API", version="1.0.0", root_path=ROOT_PATH)
+@asynccontextmanager
+async def lifespan(application: FastAPI):
+    application.state.accepting_requests = True
+    try:
+        yield
+    finally:
+        application.state.accepting_requests = False
+
+
+app = FastAPI(title="RAG API", version="1.0.0", root_path=ROOT_PATH, lifespan=lifespan)
+app.middleware("http")(operational_middleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -42,7 +55,27 @@ LOCAL_PROVIDER = "local_sbert"
 
 @app.get("/health")
 def health() -> dict[str, object]:
-    return services.health_payload()
+    return {"status": "ok"}
+
+
+@app.get("/ready")
+def readiness() -> dict[str, object] | JSONResponse:
+    if not getattr(app.state, "accepting_requests", True):
+        return JSONResponse(
+            status_code=503,
+            content={"status": "not_ready", "checks": {"shutdown": "in_progress"}},
+        )
+    chroma_ok, chroma_message = check_chroma_connectivity(CHROMA_DB_PATH_LOCAL)
+    payload = {
+        "status": "ready" if chroma_ok else "not_ready",
+        "checks": {"chroma_local": chroma_message},
+    }
+    return payload if chroma_ok else JSONResponse(status_code=503, content=payload)
+
+
+@app.get("/metrics", dependencies=[Depends(require_internal_api_key)])
+def metrics() -> PlainTextResponse:
+    return PlainTextResponse(render_metrics(), media_type="text/plain; version=0.0.4")
 
 
 @app.post(

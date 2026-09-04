@@ -6,6 +6,11 @@ import threading
 from collections.abc import Sequence
 from typing import Any, Protocol
 
+from API_RAG_NEW.operations import increment
+
+
+EMBEDDING_CACHE_VERSION = "v1"
+
 
 class EmbeddingProviderProtocol(Protocol):
     provider: str
@@ -46,8 +51,10 @@ class EmbeddingCache:
             return None
         with self._lock:
             if key not in self._cache:
+                increment("weavecarbon_rag_cache_requests_total", cache="embedding", result="miss")
                 return None
             self._cache.move_to_end(key)
+            increment("weavecarbon_rag_cache_requests_total", cache="embedding", result="hit")
             return self._cache[key]
 
     def put(self, key: str, vector: list[float]) -> None:
@@ -63,7 +70,7 @@ class EmbeddingCache:
     @staticmethod
     def make_key(model_name: str, prefix: str, text: str) -> str:
         return hashlib.sha256(
-            f"{model_name}|{prefix}|{text}".encode("utf-8")
+            f"{EMBEDDING_CACHE_VERSION}|{model_name}|{prefix}|{text}".encode("utf-8")
         ).hexdigest()[:32]
 
 
