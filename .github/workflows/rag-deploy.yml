@@ -29,7 +29,7 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
 
       - name: Scan source and locks
-        uses: aquasecurity/trivy-action@v0.31.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
@@ -112,7 +112,7 @@ jobs:
           docker run --rm weavecarbon-rag:m3 python -m pip check
 
       - name: Scan runtime image
-        uses: aquasecurity/trivy-action@v0.31.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: weavecarbon-rag:m3
           format: table
@@ -221,7 +221,7 @@ jobs:
           sbom: true
 
       - name: Scan immutable RAG image
-        uses: aquasecurity/trivy-action@v0.31.0
+        uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: ${{ steps.image.outputs.name }}@${{ steps.build.outputs.digest }}
           format: table
