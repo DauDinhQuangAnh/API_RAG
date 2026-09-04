@@ -1,7 +1,6 @@
 # Macro Phase M3 - RAG Runtime, Evaluation and Retrieval Quality
 
-Status: IMPLEMENTED; production PASS requires the repository CI run described
-below to complete successfully.
+Status: PASS
 
 Date: 2026-09-04
 
@@ -78,6 +77,8 @@ production capacity claim.
 | Memory | hybrid final | 90% | 100% | 100% | 100% | 100% | 2.43 ms | 4.63 ms |
 | Chroma | vector baseline | 90% | 100% | 100% | 100% | 0% | 1.49 ms | 4.10 ms |
 | Chroma | hybrid final | 90% | 100% | 100% | 100% | 100% | 2.61 ms | 4.81 ms |
+| pgvector (CI) | vector baseline | 90% | 100% | 100% | 100% | 0% | 0.47 ms | 1.06 ms |
+| pgvector (CI) | hybrid final | 90% | 100% | 100% | 100% | 100% | 0.89 ms | 1.10 ms |
 
 The additional local latency buys deterministic evidence rejection: all three
 out-of-corpus questions that vector-only retrieval incorrectly treated as
@@ -148,9 +149,20 @@ Local evidence before push:
 - workflow YAML parse: PASS;
 - `git diff --check`: PASS.
 
-CI must additionally prove a fresh locked evaluation install, Memory/Chroma/
-pgvector quality gates, a fresh runtime image build, non-root health startup and
-container measurements before deployment can begin.
+GitHub Actions run `33850105712` for implementation commit `cb0131c` completed
+successfully:
+
+- `verify`: fresh Python 3.12.14 evaluation install, `pip check`, compileall,
+  19 tests, and Memory/Chroma/pgvector gates passed;
+- `container`: fresh full runtime install and `pip check` passed; final image
+  size was 1,797,371,938 bytes, cold start was 3,323 ms, and idle memory was
+  196.9 MiB;
+- `deploy`: VPS built the CPU-only image, changed only the mounted RAG data/cache
+  ownership to UID/GID 10001, recreated RAG, and observed RAG and proxy healthy.
+
+The supporting deployment change is frontend commit `e28d5df`. The application
+implementation is RAG commit `cb0131c`. Production retained the existing Chroma
+volume; no collection was deleted or reindexed.
 
 Application rollback is a normal revert of the M3 commit. Existing Chroma files
 remain compatible because M3 has no schema migration and no automatic reindex.
