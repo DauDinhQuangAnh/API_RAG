@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "dataset_id": "weavecarbon-compliance-v1",
+  "description": "Synthetic compliance fixtures for retrieval regression tests; not legal advice.",
+  "documents": [
+    {
+      "id": "cbam-scope-1",
+      "source_id": "eu-cbam-scope",
+      "source": "fixtures/eu-cbam-scope.md",
+      "metadata": {"section_title": "Covered goods", "page_number": 1},
+      "text": "The CBAM scope covers cement, iron and steel, aluminium, fertilisers, electricity and hydrogen. Product classification depends on the applicable CN code."
+    },
+    {
+      "id": "cbam-timeline-1",
+      "source_id": "eu-cbam-timeline",
+      "source": "fixtures/eu-cbam-timeline.md",
+      "metadata": {"section_title": "Implementation timeline", "page_number": 2},
+      "text": "The CBAM transitional period runs from 1 October 2023 through 31 December 2025. The definitive period starts on 1 January 2026."
+    },
+    {
+      "id": "cbam-reporting-1",
+      "source_id": "eu-cbam-reporting",
+      "source": "fixtures/eu-cbam-reporting.md",
+      "metadata": {"section_title": "Transitional reporting", "page_number": 3},
+      "text": "During the transitional period, reporting declarants submit a CBAM report for each quarter. The report includes quantities of imported goods and their embedded direct and indirect emissions."
+    },
+    {
+      "id": "carbon-calculation-1",
+      "source_id": "ghg-calculation-method",
+      "source": "fixtures/ghg-calculation-method.md",
+      "metadata": {"section_title": "Calculation method", "page_number": 4},
+      "text": "A basic greenhouse gas calculation multiplies activity data by the matching emission factor. Results are normalized and reported as kilograms or tonnes of carbon dioxide equivalent, written CO2e."
+    },
+    {
+      "id": "evidence-controls-1",
+      "source_id": "audit-evidence-controls",
+      "source": "fixtures/audit-evidence-controls.md",
+      "metadata": {"section_title": "Evidence controls", "page_number": 5},
+      "text": "Auditable evidence records preserve the source identifier, reporting period, responsible organization, calculation version and upload timestamp. Reviewers must be able to trace a reported value to its evidence."
+    },
+    {
+      "id": "supplier-data-1",
+      "source_id": "supplier-data-quality",
+      "source": "fixtures/supplier-data-quality.md",
+      "metadata": {"section_title": "Data quality", "page_number": 6},
+      "text": "Primary supplier data should identify the facility, production period, measurement unit and verification status. Missing fields are recorded as data quality gaps instead of being invented."
+    },
+    {
+      "id": "textile-traceability-1",
+      "source_id": "textile-traceability",
+      "source": "fixtures/textile-traceability.md",
+      "metadata": {"section_title": "Textile traceability", "page_number": 7},
+      "text": "Textile product traceability links a finished garment to material composition, manufacturing facility, supplier and production batch. It is separate from CBAM product coverage."
+    },
+    {
+      "id": "energy-records-1",
+      "source_id": "energy-records",
+      "source": "fixtures/energy-records.md",
+      "metadata": {"section_title": "Energy evidence", "page_number": 8},
+      "text": "Energy evidence may include utility invoices, meter readings and renewable energy certificates. Every record needs a date range and an organization owner."
+    }
+  ],
+  "cases": [
+    {
+      "id": "scope-products",
+      "query": "Which product groups are covered by CBAM?",
+      "expected_sources": ["eu-cbam-scope"],
+      "expected_facts": ["cement", "iron and steel", "aluminium", "hydrogen"],
+      "should_answer": true
+    },
+    {
+      "id": "scope-classification",
+      "query": "What code determines CBAM product classification?",
+      "expected_sources": ["eu-cbam-scope"],
+      "expected_facts": ["CN code"],
+      "should_answer": true
+    },
+    {
+      "id": "transition-end",
+      "query": "When does the CBAM transitional period end?",
+      "expected_sources": ["eu-cbam-timeline"],
+      "expected_facts": ["31 December 2025"],
+      "should_answer": true
+    },
+    {
+      "id": "definitive-start",
+      "query": "When does the definitive CBAM period start?",
+      "expected_sources": ["eu-cbam-timeline"],
+      "expected_facts": ["1 January 2026"],
+      "should_answer": true
+    },
+    {
+      "id": "quarterly-report",
+      "query": "What must a transitional quarterly CBAM report include?",
+      "expected_sources": ["eu-cbam-reporting"],
+      "expected_facts": ["quantities of imported goods", "direct and indirect emissions"],
+      "should_answer": true
+    },
+    {
+      "id": "calculation-formula",
+      "query": "How is a basic greenhouse gas result calculated?",
+      "expected_sources": ["ghg-calculation-method"],
+      "expected_facts": ["activity data", "emission factor", "CO2e"],
+      "should_answer": true
+    },
+    {
+      "id": "audit-fields",
+      "query": "Which fields make reported evidence auditable and traceable?",
+      "expected_sources": ["audit-evidence-controls"],
+      "expected_facts": ["source identifier", "reporting period", "calculation version"],
+      "should_answer": true
+    },
+    {
+      "id": "supplier-gaps",
+      "query": "What should happen when primary supplier data fields are missing?",
+      "expected_sources": ["supplier-data-quality"],
+      "expected_facts": ["data quality gaps", "instead of being invented"],
+      "should_answer": true
+    },
+    {
+      "id": "textile-links",
+      "query": "What does textile product traceability link to a finished garment?",
+      "expected_sources": ["textile-traceability"],
+      "expected_facts": ["material composition", "manufacturing facility", "production batch"],
+      "should_answer": true
+    },
+    {
+      "id": "energy-proof",
+      "query": "Which records can be used as energy evidence?",
+      "expected_sources": ["energy-records"],
+      "expected_facts": ["utility invoices", "meter readings", "renewable energy certificates"],
+      "should_answer": true
+    },
+    {
+      "id": "no-answer-wage",
+      "query": "What will the minimum wage in Japan be in 2030?",
+      "expected_sources": [],
+      "expected_facts": [],
+      "should_answer": false
+    },
+    {
+      "id": "no-answer-penalty",
+      "query": "What exact customs penalty applies in France for a late declaration?",
+      "expected_sources": [],
+      "expected_facts": [],
+      "should_answer": false
+    },
+    {
+      "id": "no-answer-weather",
+      "query": "What is tomorrow's weather in Bangkok?",
+      "expected_sources": [],
+      "expected_facts": [],
+      "should_answer": false
+    }
+  ]
+}

@@ -48,6 +48,7 @@ class QueryRequest(BaseModel):
 
 class Citation(BaseModel):
     id: int
+    source_id: str | None = None
     source: str | None = None
     source_type: str | None = None
     page_number: int | None = None

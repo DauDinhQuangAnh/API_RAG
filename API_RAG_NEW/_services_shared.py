@@ -16,6 +16,7 @@ from API_RAG_NEW.config import (
     RAG_CHUNKING_PROFILE,
     RAG_EMBEDDING_QUEUE_TIMEOUT_SECONDS,
     RAG_ENABLE_DISTANCE_GUARD,
+    RAG_ENABLE_EVIDENCE_GUARD,
     RAG_ENABLE_FINAL_ANSWER_FALLBACK,
     RAG_FINAL_TOP_N,
     RAG_INCLUDE_NEIGHBORS,
@@ -34,6 +35,7 @@ from API_RAG_NEW.config import (
     RAG_MAX_TOTAL_CANDIDATES,
     RAG_QUERY_QUEUE_TIMEOUT_SECONDS,
     RAG_RERANKER_TYPE,
+    RAG_MIN_LEXICAL_EVIDENCE_SCORE,
     check_chroma_connectivity,
     get_cached_embedding_runtime,
     get_embedding_runtime,
@@ -50,7 +52,7 @@ FINAL_ANSWER_FALLBACK_MESSAGE = (
 ALLOWED_CHUNKING_PROFILES = {"hybrid", "semantic"}
 CHUNKING_PROFILE_ERROR = "Invalid chunking_profile. Allowed values: hybrid, semantic."
 NO_CONTEXT_ANSWER_MESSAGE = (
-    "Hiện tài liệu chưa cung cấp đủ thông tin để trả lời chính xác câu hỏi này."
+    "Không đủ bằng chứng trong các nguồn đã lập chỉ mục để trả lời câu hỏi này."
 )
 STORAGE_NAME_HASH_LENGTH = 12
 DEFAULT_COLLECTION_DESCRIPTION = "A collection for RAG system"
@@ -181,6 +183,8 @@ def runtime_config_payload() -> dict[str, object]:
         "rag_max_total_candidates": RAG_MAX_TOTAL_CANDIDATES,
         "rag_enable_distance_guard": RAG_ENABLE_DISTANCE_GUARD,
         "rag_max_distance": RAG_MAX_DISTANCE,
+        "rag_enable_evidence_guard": RAG_ENABLE_EVIDENCE_GUARD,
+        "rag_min_lexical_evidence_score": RAG_MIN_LEXICAL_EVIDENCE_SCORE,
         "rag_internal_api_key_enabled": bool(RAG_INTERNAL_API_KEY),
         "rag_max_concurrent_queries": RAG_MAX_CONCURRENT_QUERIES,
         "rag_max_concurrent_llm_calls": RAG_MAX_CONCURRENT_LLM_CALLS,

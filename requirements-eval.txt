@@ -1,0 +1,6 @@
+# Lightweight CI/evaluation environment; every direct dependency is exact-pinned.
+chromadb==1.5.9
+fastapi==0.139.0
+psycopg2-binary==2.9.11
+pytest==9.1.1
+python-dotenv==1.2.2

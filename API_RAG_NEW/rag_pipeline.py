@@ -13,6 +13,10 @@ from fastapi import HTTPException
 from API_RAG_NEW.concurrency import acquire_embedding_slot
 from API_RAG_NEW.embeddings import encode_documents, encode_queries
 from API_RAG_NEW.reranker import CrossEncoderReranker, rerank_candidate_ids
+from API_RAG_NEW.retrieval_quality import (
+    evidence_is_sufficient,
+    hybrid_rank_candidate_ids,
+)
 
 
 _INTERNAL_RECORD_ID_KEYS = {"id", "_id"}
@@ -54,6 +58,9 @@ def sanitize_metadata(metadata: dict[str, Any]) -> dict[str, Any]:
             sanitized[sanitized_key] = value.isoformat()
         else:
             sanitized[sanitized_key] = str(value)
+
+    if "source_id" not in sanitized and sanitized.get("doc_id"):
+        sanitized["source_id"] = str(sanitized["doc_id"])
 
     return sanitized
 
@@ -174,6 +181,8 @@ def vector_search(
     max_total_candidates: int = 40,
     enable_distance_guard: bool = False,
     max_distance: float | None = None,
+    enable_evidence_guard: bool = False,
+    min_lexical_evidence_score: float = 0.12,
     cross_encoder_model: str | None = None,
 ) -> tuple[list[Any], str]:
     final_n = max(1, int(number_docs_retrieval))
@@ -188,6 +197,13 @@ def vector_search(
     )
     candidates = _chunks_from_query_results(search_results)
     if _distance_guard_blocks(candidates, enable_distance_guard, max_distance):
+        return [[]], ""
+    if enable_evidence_guard and not evidence_is_sufficient(
+        query,
+        candidates,
+        min_lexical_score=min_lexical_evidence_score,
+        max_distance=max_distance,
+    ):
         return [[]], ""
 
     initial_candidate_ids = [chunk.id for chunk in candidates]
@@ -597,7 +613,9 @@ def _rank_chunks(
     normalized_type = reranker_type.casefold()
 
     # Cross-encoder reranker (local, tiếng Việt)
-    if normalized_type == "crossencoder":
+    if normalized_type == "hybrid":
+        ranked_ids = hybrid_rank_candidate_ids(query, original_order, final_n)
+    elif normalized_type == "crossencoder":
         model_name = cross_encoder_model or _default_cross_encoder_model()
         try:
             reranker = CrossEncoderReranker(model_name)

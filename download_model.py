@@ -3,9 +3,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
-from typing import Optional
-
-from sentence_transformers import SentenceTransformer
+from typing import Any, Optional
 
 PRIMARY_MODEL_NAME = "keepitreal/vietnamese-sbert"
 FALLBACK_MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
@@ -34,15 +32,24 @@ def _save_model_name(model_name: str) -> None:
     )
 
 
-def _validate_model(model: SentenceTransformer) -> None:
+def _sentence_transformer_class() -> Any:
+    # Importing sentence-transformers also imports torch and adds hundreds of MiB
+    # to an otherwise lightweight API startup. Load it only when embeddings are
+    # first requested.
+    from sentence_transformers import SentenceTransformer
+
+    return SentenceTransformer
+
+
+def _validate_model(model: Any) -> None:
     embeddings = model.encode(TEST_SENTENCES)
     if not len(embeddings) or not len(embeddings[0]):
         raise RuntimeError("Embedding model returned an empty vector.")
 
 
-def _try_load_local_model(model_name: str) -> Optional[SentenceTransformer]:
+def _try_load_local_model(model_name: str) -> Optional[Any]:
     try:
-        model = SentenceTransformer(model_name, local_files_only=True)
+        model = _sentence_transformer_class()(model_name, local_files_only=True)
         _validate_model(model)
         return model
     except TypeError:
@@ -54,7 +61,7 @@ def _try_load_local_model(model_name: str) -> Optional[SentenceTransformer]:
 def ensure_embedding_model(
     preferred_model: str = PRIMARY_MODEL_NAME,
     fallback_model: str = FALLBACK_MODEL_NAME,
-) -> tuple[SentenceTransformer, str, bool]:
+) -> tuple[Any, str, bool]:
     saved_model_name = _load_saved_model_name()
     candidates: list[str] = []
 
@@ -70,10 +77,11 @@ def ensure_embedding_model(
             return model, candidate, False
 
     last_error: Optional[Exception] = None
+    sentence_transformer_class = _sentence_transformer_class()
     for candidate in candidates:
         try:
             print(f"Preparing embedding model: {candidate}")
-            model = SentenceTransformer(candidate)
+            model = sentence_transformer_class(candidate)
             _validate_model(model)
             _save_model_name(candidate)
             print(f"Embedding model ready: {candidate}")

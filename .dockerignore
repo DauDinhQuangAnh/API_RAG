@@ -20,6 +20,9 @@ ENV
 htmlcov
 docs
 tests
+evaluation
+requirements-dev.txt
+requirements-eval.txt
 db
 artifacts
 uploads

@@ -42,6 +42,18 @@ Default local base URL: `http://127.0.0.1:8000`. Do not expose this service
 directly with a public tunnel or reverse proxy; the Node backend is the public
 control plane.
 
+## Deterministic quality gate
+
+The non-paid evaluation path uses a versioned synthetic compliance corpus and
+checks retrieval recall, citation integrity, grounded fact coverage, no-answer
+behavior and latency. It does not download an embedding model or call Gemini.
+
+```bash
+python evaluation/runner.py --stores memory chroma --check
+```
+
+See `evaluation/README.md` for the isolated pgvector comparison used in CI.
+
 ## Configuration
 
 Copy `.env.example` to `.env` and fill in local values — `.env` holds secrets and

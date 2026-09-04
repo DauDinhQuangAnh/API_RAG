@@ -16,6 +16,7 @@ from API_RAG_NEW.config import (
     RAG_CROSS_ENCODER_MODEL,
     RAG_DEBUG_MODE,
     RAG_ENABLE_DISTANCE_GUARD,
+    RAG_ENABLE_EVIDENCE_GUARD,
     RAG_ENABLE_FINAL_ANSWER_FALLBACK,
     RAG_FINAL_TOP_N,
     RAG_INCLUDE_NEIGHBORS,
@@ -24,6 +25,7 @@ from API_RAG_NEW.config import (
     RAG_MAX_DISTANCE,
     RAG_MAX_TOTAL_CANDIDATES,
     RAG_RERANKER_TYPE,
+    RAG_MIN_LEXICAL_EVIDENCE_SCORE,
     get_gemini_api_key,
 )
 from API_RAG_NEW.rag_pipeline import vector_search
@@ -67,6 +69,8 @@ def query_collection(
             max_total_candidates=RAG_MAX_TOTAL_CANDIDATES,
             enable_distance_guard=RAG_ENABLE_DISTANCE_GUARD,
             max_distance=RAG_MAX_DISTANCE,
+            enable_evidence_guard=RAG_ENABLE_EVIDENCE_GUARD,
+            min_lexical_evidence_score=RAG_MIN_LEXICAL_EVIDENCE_SCORE,
             cross_encoder_model=RAG_CROSS_ENCODER_MODEL,
         )
     except ValueError as exc:
@@ -140,6 +144,8 @@ def query_collection_stream(
             max_total_candidates=RAG_MAX_TOTAL_CANDIDATES,
             enable_distance_guard=RAG_ENABLE_DISTANCE_GUARD,
             max_distance=RAG_MAX_DISTANCE,
+            enable_evidence_guard=RAG_ENABLE_EVIDENCE_GUARD,
+            min_lexical_evidence_score=RAG_MIN_LEXICAL_EVIDENCE_SCORE,
             cross_encoder_model=RAG_CROSS_ENCODER_MODEL,
         )
     except (ValueError, HTTPException) as exc:

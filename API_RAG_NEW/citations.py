@@ -12,12 +12,18 @@ def build_citations_from_metadatas(
     metadatas: list[dict[str, Any]],
 ) -> list[Citation]:
     citations: list[Citation] = []
-    for index, metadata in enumerate(metadatas, start=1):
+    for metadata in metadatas:
         normalized_metadata = metadata if isinstance(metadata, dict) else {}
+        source_id = _optional_str(normalized_metadata.get("source_id"))
+        doc_id = _optional_str(normalized_metadata.get("doc_id"))
+        source = _optional_str(normalized_metadata.get("source"))
+        if source_id is None and doc_id is None and source is None:
+            continue
         citations.append(
             Citation(
-                id=index,
-                source=_optional_str(normalized_metadata.get("source")),
+                id=len(citations) + 1,
+                source_id=source_id,
+                source=source,
                 source_type=_optional_str(normalized_metadata.get("source_type")),
                 page_number=_optional_int(normalized_metadata.get("page_number")),
                 chunk_index=_optional_int(normalized_metadata.get("chunk_index")),
@@ -28,7 +34,7 @@ def build_citations_from_metadatas(
                 row_chunk_index=_optional_int(
                     normalized_metadata.get("row_chunk_index")
                 ),
-                doc_id=_optional_str(normalized_metadata.get("doc_id")),
+                doc_id=doc_id,
                 section_title=_optional_str(
                     normalized_metadata.get("section_title")
                 ),

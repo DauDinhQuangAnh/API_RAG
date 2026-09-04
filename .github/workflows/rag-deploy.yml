@@ -13,7 +13,23 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: rag_eval
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d rag_eval"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      RAG_EVAL_PGVECTOR_DSN: postgresql://postgres:postgres@127.0.0.1:5432/rag_eval
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,18 +38,83 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements-eval.txt
 
-      - name: Install test dependencies
-        run: python -m pip install pytest fastapi python-dotenv
+      - name: Install locked evaluation dependencies
+        run: |
+          python -m pip install --requirement requirements-eval.txt
+          python -m pip check
+
+      - name: Validate dependency locks
+        run: python scripts/check_dependency_pins.py
 
       - name: Syntax check
-        run: python -m compileall API_RAG_NEW chunking llms *.py
+        run: python -m compileall API_RAG_NEW chunking evaluation llms scripts *.py
 
-      - name: Security tests
+      - name: Unit and policy tests
         run: python -m pytest -q
 
-  deploy:
+      - name: Non-paid retrieval and vector-store benchmark
+        run: >-
+          python -m evaluation.runner
+          --stores memory chroma pgvector
+          --strategies vector hybrid
+          --require-stores
+          --check
+
+  container:
     needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build locked runtime image
+        run: |
+          docker build --tag weavecarbon-rag:m3 .
+          docker run --rm weavecarbon-rag:m3 python -m pip check
+
+      - name: Measure image, cold start and idle memory
+        shell: bash
+        run: |
+          set -euo pipefail
+          image_bytes="$(docker image inspect weavecarbon-rag:m3 --format '{{.Size}}')"
+          started_ms="$(date +%s%3N)"
+          docker run --detach --name rag-m3 \
+            --env RAG_INTERNAL_API_KEY=ci-internal-key \
+            --env RAG_REQUIRE_INTERNAL_API_KEY=true \
+            weavecarbon-rag:m3 >/dev/null
+          trap 'docker logs rag-m3 || true; docker rm --force rag-m3 >/dev/null 2>&1 || true' EXIT
+          ready=0
+          for attempt in $(seq 1 120); do
+            if docker exec rag-m3 python -c \
+              "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).read()"; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [[ "$ready" != "1" ]]; then
+            echo "RAG container did not become ready within 120 seconds."
+            exit 1
+          fi
+          ready_ms="$(date +%s%3N)"
+          cold_start_ms="$((ready_ms - started_ms))"
+          memory_usage="$(docker stats rag-m3 --no-stream --format '{{.MemUsage}}')"
+          {
+            echo '### M3 RAG runtime measurements'
+            echo
+            echo "- Image bytes: ${image_bytes}"
+            echo "- Cold start to first health response: ${cold_start_ms} ms"
+            echo "- Idle memory: ${memory_usage}"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    needs:
+      - verify
+      - container
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production
