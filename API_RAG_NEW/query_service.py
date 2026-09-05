@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Generator
 from typing import Any
 
@@ -29,6 +30,7 @@ from API_RAG_NEW.config import (
     get_gemini_api_key,
 )
 from API_RAG_NEW.rag_pipeline import vector_search
+from API_RAG_NEW.operations import observe_duration
 from API_RAG_NEW.schemas import QueryRequest, QueryResponse
 from API_RAG_NEW._services_shared import (
     FINAL_ANSWER_FALLBACK_MESSAGE,
@@ -53,6 +55,7 @@ def query_collection(
     collection = _get_collection_or_404(runtime, storage_name)
     _validate_collection_embedding_metadata(runtime, collection)
     final_n = _resolve_final_docs_retrieval(req)
+    retrieval_started_at = time.perf_counter()
     try:
         metadatas, retrieved_data = vector_search(
             runtime.embedding_model,
@@ -75,6 +78,8 @@ def query_collection(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    finally:
+        observe_duration("retrieval", retrieval_started_at)
 
     final_metadatas = metadatas[0] if metadatas else []
     citations = build_citations_from_metadatas(final_metadatas)
@@ -91,6 +96,7 @@ def query_collection(
         )
 
     answer_llm = _build_llm()
+    llm_started_at = time.perf_counter()
     try:
         answer = answer_llm.generate_content(full_prompt)
     except Exception as exc:
@@ -98,6 +104,8 @@ def query_collection(
             raise
         print(f"Final answer generation failed: {exc}")
         answer = FINAL_ANSWER_FALLBACK_MESSAGE
+    finally:
+        observe_duration("llm_answer", llm_started_at)
 
     return QueryResponse(
         metadatas=metadatas,
@@ -128,6 +136,7 @@ def query_collection_stream(
         return
 
     final_n = _resolve_final_docs_retrieval(req)
+    retrieval_started_at = time.perf_counter()
     try:
         metadatas, retrieved_data = vector_search(
             runtime.embedding_model,
@@ -152,6 +161,8 @@ def query_collection_stream(
         message = exc.detail if isinstance(exc, HTTPException) else str(exc)
         yield _sse({"type": "error", "message": message})
         return
+    finally:
+        observe_duration("retrieval_stream", retrieval_started_at)
 
     final_metadatas = metadatas[0] if metadatas else []
     citations = build_citations_from_metadatas(final_metadatas)
@@ -170,6 +181,7 @@ def query_collection_stream(
         return
 
     full_prompt = _build_query_prompt(req.query, retrieved_data)
+    llm_started_at = time.perf_counter()
     try:
         llm = _build_llm()
         for token in llm.generate_content_stream(full_prompt):
@@ -181,6 +193,8 @@ def query_collection_stream(
             return
         print(f"Streaming answer generation failed: {exc}")
         yield _sse({"type": "answer", "content": FINAL_ANSWER_FALLBACK_MESSAGE})
+    finally:
+        observe_duration("llm_answer_stream", llm_started_at)
 
     yield _sse({"type": "done"})
 

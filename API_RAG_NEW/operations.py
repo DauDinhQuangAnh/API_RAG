@@ -31,9 +31,20 @@ def get_correlation_id() -> str | None:
 
 
 def increment(name: str, **labels: Any) -> None:
+    add(name, 1, **labels)
+
+
+def add(name: str, amount: float, **labels: Any) -> None:
     label_tuple = tuple(sorted((key, str(value)) for key, value in labels.items()))
     with _lock:
-        _counters[(name, label_tuple)] += 1
+        _counters[(name, label_tuple)] += amount
+
+
+def observe_duration(stage: str, started_at: float) -> float:
+    duration_ms = (time.perf_counter() - started_at) * 1000
+    increment("weavecarbon_rag_stage_duration_ms_count", stage=stage)
+    add("weavecarbon_rag_stage_duration_ms_sum", duration_ms, stage=stage)
+    return duration_ms
 
 
 def _escape(value: str) -> str:
@@ -99,6 +110,17 @@ async def operational_middleware(request: Request, call_next):
             method=request.method,
             path=safe_path,
             status=status_code,
+        )
+        increment(
+            "weavecarbon_rag_http_duration_ms_count",
+            method=request.method,
+            path=safe_path,
+        )
+        add(
+            "weavecarbon_rag_http_duration_ms_sum",
+            duration_ms,
+            method=request.method,
+            path=safe_path,
         )
         logger.info(
             "request_completed method=%s path=%s status=%s duration_ms=%.1f",
