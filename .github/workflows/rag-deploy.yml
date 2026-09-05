@@ -157,14 +157,14 @@ jobs:
               exit 1
             fi
             if docker exec rag-m3 python -c \
-              "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).read()"; then
+              "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/ready', timeout=2).read()"; then
               ready=1
               break
             fi
             sleep 1
           done
           if [[ "$ready" != "1" ]]; then
-            echo "::error title=RAG cold-start timeout::Liveness endpoint did not respond within 120 seconds."
+            echo "::error title=RAG cold-start timeout::Readiness endpoint did not respond within 120 seconds."
             exit 1
           fi
           ready_ms="$(date +%s%3N)"

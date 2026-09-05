@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from API_RAG_NEW import services
 from API_RAG_NEW.concurrency import acquire_ingest_slot, acquire_query_slot
 from API_RAG_NEW.config import ALLOWED_ORIGINS, CHROMA_DB_PATH_LOCAL, ROOT_PATH, check_chroma_connectivity
-from API_RAG_NEW.operations import operational_middleware, render_metrics
+from API_RAG_NEW.operations import logger, operational_middleware, render_metrics
 from API_RAG_NEW.security import require_internal_api_key
 from API_RAG_NEW.schemas import (
     CollectionCreateRequest,
@@ -70,6 +70,8 @@ def readiness() -> dict[str, object] | JSONResponse:
         "status": "ready" if chroma_ok else "not_ready",
         "checks": {"chroma_local": chroma_message},
     }
+    if not chroma_ok:
+        logger.error("readiness_failed chroma_local=%s", chroma_message)
     return payload if chroma_ok else JSONResponse(status_code=503, content=payload)
 
 
