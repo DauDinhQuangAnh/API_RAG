@@ -30,3 +30,9 @@ def test_readiness_route_allows_multiple_response_types() -> None:
     main_module = (ROOT / "API_RAG_NEW" / "main.py").read_text(encoding="utf-8")
 
     assert '@app.get("/ready", response_model=None)' in main_module
+
+
+def test_failed_chroma_readiness_drops_poisoned_cached_client() -> None:
+    config_module = (ROOT / "API_RAG_NEW" / "config.py").read_text(encoding="utf-8")
+
+    assert "_CHROMA_CLIENTS.pop(db_path, None)" in config_module

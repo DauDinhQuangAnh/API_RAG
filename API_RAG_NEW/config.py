@@ -186,4 +186,7 @@ def check_chroma_connectivity(db_path: str) -> tuple[bool, str]:
         client.heartbeat()
         return True, "ok"
     except Exception as exc:
+        # A failed Rust/SQLite initialization can leave a partially constructed
+        # client cached. Drop it so the next readiness probe gets a clean retry.
+        _CHROMA_CLIENTS.pop(db_path, None)
         return False, str(exc)
