@@ -322,7 +322,11 @@ jobs:
           DEPLOY_PORT="${DEPLOY_PORT:-22}"
           REMOTE_RAG_IMAGE="${{ needs.publish.outputs.image }}@${{ needs.publish.outputs.digest }}"
           GHCR_TOKEN_B64="$(printf '%s' "${GHCR_TOKEN:-}" | base64 -w0)"
-          ssh -T -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
+          ssh \
+            -o ServerAliveInterval=30 \
+            -o ServerAliveCountMax=20 \
+            -o TCPKeepAlive=yes \
+            -T -p "$DEPLOY_PORT" "$DEPLOY_USER@$DEPLOY_HOST" \
             "RAG_IMAGE='$REMOTE_RAG_IMAGE' GHCR_USERNAME='$GHCR_USERNAME' GHCR_TOKEN_B64='$GHCR_TOKEN_B64' bash --noprofile --norc -se" <<'EOF'
           set -euo pipefail
           GHCR_TOKEN="$(printf '%s' "$GHCR_TOKEN_B64" | base64 -d)"
