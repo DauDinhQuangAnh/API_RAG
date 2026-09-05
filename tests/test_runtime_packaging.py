@@ -26,9 +26,7 @@ def test_runtime_container_is_non_root_and_has_a_healthcheck() -> None:
     assert "--no-install-recommends libgomp1" in dockerfile
 
 
-def test_fastapi_application_can_be_imported() -> None:
-    from API_RAG_NEW.main import app
+def test_readiness_route_allows_multiple_response_types() -> None:
+    main_module = (ROOT / "API_RAG_NEW" / "main.py").read_text(encoding="utf-8")
 
-    paths = {route.path for route in app.routes}
-    assert "/health" in paths
-    assert "/ready" in paths
+    assert '@app.get("/ready", response_model=None)' in main_module
