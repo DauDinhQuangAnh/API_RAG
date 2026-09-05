@@ -134,16 +134,28 @@ jobs:
           set -euo pipefail
           image_bytes="$(docker image inspect weavecarbon-rag:m3 --format '{{.Size}}')"
           runtime_user="$(docker image inspect weavecarbon-rag:m3 --format '{{.Config.User}}')"
-          test -n "$runtime_user" && test "$runtime_user" != '0' && test "$runtime_user" != 'root'
-          test "$image_bytes" -le 2306867200
+          echo "RAG image bytes: ${image_bytes}; runtime user: ${runtime_user:-<empty>}"
+          if [[ -z "$runtime_user" || "$runtime_user" == '0' || "$runtime_user" == 'root' ]]; then
+            echo "::error title=Invalid runtime user::RAG image must run as a non-root user; found '${runtime_user:-<empty>}'."
+            exit 1
+          fi
+          if (( image_bytes > 2306867200 )); then
+            echo "::error title=RAG image budget exceeded::Image is ${image_bytes} bytes; limit is 2306867200 bytes."
+            exit 1
+          fi
           started_ms="$(date +%s%3N)"
           docker run --detach --name rag-m3 \
             --env RAG_INTERNAL_API_KEY=ci-internal-key \
             --env RAG_REQUIRE_INTERNAL_API_KEY=true \
             weavecarbon-rag:m3 >/dev/null
-          trap 'docker logs rag-m3 || true; docker rm --force rag-m3 >/dev/null 2>&1 || true' EXIT
+          trap 'docker logs --tail 200 rag-m3 || true; docker rm --force rag-m3 >/dev/null 2>&1 || true' EXIT
           ready=0
           for attempt in $(seq 1 120); do
+            if [[ "$(docker inspect rag-m3 --format '{{.State.Running}}')" != 'true' ]]; then
+              echo "::error title=RAG container exited::Container stopped before its liveness endpoint responded."
+              docker inspect rag-m3 --format 'status={{.State.Status}} exit={{.State.ExitCode}} error={{.State.Error}}'
+              exit 1
+            fi
             if docker exec rag-m3 python -c \
               "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2).read()"; then
               ready=1
@@ -152,7 +164,7 @@ jobs:
             sleep 1
           done
           if [[ "$ready" != "1" ]]; then
-            echo "RAG container did not become ready within 120 seconds."
+            echo "::error title=RAG cold-start timeout::Liveness endpoint did not respond within 120 seconds."
             exit 1
           fi
           ready_ms="$(date +%s%3N)"
