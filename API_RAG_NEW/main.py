@@ -58,7 +58,7 @@ def health() -> dict[str, object]:
     return {"status": "ok"}
 
 
-@app.get("/ready")
+@app.get("/ready", response_model=None)
 def readiness() -> dict[str, object] | JSONResponse:
     if not getattr(app.state, "accepting_requests", True):
         return JSONResponse(

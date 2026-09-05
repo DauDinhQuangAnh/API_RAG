@@ -24,3 +24,11 @@ def test_runtime_container_is_non_root_and_has_a_healthcheck() -> None:
     assert "USER 10001:10001" in dockerfile
     assert "HEALTHCHECK" in dockerfile
     assert "--no-install-recommends libgomp1" in dockerfile
+
+
+def test_fastapi_application_can_be_imported() -> None:
+    from API_RAG_NEW.main import app
+
+    paths = {route.path for route in app.routes}
+    assert "/health" in paths
+    assert "/ready" in paths
