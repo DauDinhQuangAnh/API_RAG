@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 
 import chromadb
@@ -20,6 +21,7 @@ LOCAL_EMBEDDING_PROVIDER = "local_sbert"
 DEFAULT_COLLECTION_DESCRIPTION = "A collection for RAG system"
 INGEST_BATCH_SIZE = 256
 EmbeddingProviderName = Literal["local_sbert"]
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 @dataclass(frozen=True)
@@ -62,10 +64,21 @@ def get_choice_env(name: str, default: str, supported_values: set[str]) -> str:
     return normalized if normalized in supported_values else default
 
 
+def resolve_chroma_db_path(value: str | None, default: str = "db") -> str:
+    raw_path = (value or "").strip() or default
+    path = Path(raw_path).expanduser()
+    if not path.is_absolute():
+        path = PROJECT_ROOT / path
+    return str(path.resolve())
+
+
 ROOT_PATH = os.getenv("ROOT_PATH", "").strip()
 ALLOWED_ORIGINS = parse_cors_origins(os.getenv("RAG_CORS_ORIGINS"))
-CHROMA_DB_PATH = os.getenv("CHROMA_DB_PATH", "db")
-CHROMA_DB_PATH_LOCAL = os.getenv("CHROMA_DB_PATH_LOCAL", CHROMA_DB_PATH)
+CHROMA_DB_PATH = resolve_chroma_db_path(os.getenv("CHROMA_DB_PATH"))
+CHROMA_DB_PATH_LOCAL = resolve_chroma_db_path(
+    os.getenv("CHROMA_DB_PATH_LOCAL"),
+    CHROMA_DB_PATH,
+)
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 GEMINI_RERANKER_MODEL = os.getenv("GEMINI_RERANKER_MODEL") or GEMINI_MODEL
 RAG_INITIAL_TOP_K = get_int_env("RAG_INITIAL_TOP_K", 20)
