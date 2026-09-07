@@ -331,15 +331,32 @@ jobs:
           set -euo pipefail
           GHCR_TOKEN="$(printf '%s' "$GHCR_TOKEN_B64" | base64 -d)"
           printf '%s' "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USERNAME" --password-stdin
-          cd /opt/weavecarbon/FE
-          git checkout main
-          git pull --ff-only origin main
-          cd /opt/weavecarbon/BE_Carbon-main
-          git checkout main
-          git pull --ff-only origin main
-          cd /opt/weavecarbon/rag
-          git checkout main
-          git pull --ff-only origin main
+
+          sync_repository() {
+            local repository_dir="$1"
+            local required="$2"
+            local attempt
+
+            cd "$repository_dir"
+            git checkout main
+            for attempt in 1 2 3; do
+              if GIT_SSH_COMMAND='ssh -o ConnectTimeout=20 -o ServerAliveInterval=10 -o ServerAliveCountMax=3' \
+                git pull --ff-only origin main; then
+                return 0
+              fi
+              echo "[deploy] Git sync attempt ${attempt}/3 failed for ${repository_dir}."
+              sleep 10
+            done
+
+            if [ "$required" = "true" ]; then
+              return 1
+            fi
+            echo "[deploy] Continuing with the immutable RAG image; VPS source checkout remains unchanged."
+          }
+
+          sync_repository /opt/weavecarbon/FE true
+          sync_repository /opt/weavecarbon/BE_Carbon-main true
+          sync_repository /opt/weavecarbon/rag false
           cd /opt/weavecarbon/FE
           PREVIOUS_RAG_IMAGE="$(grep '^RAG_IMAGE=' .env.vps | cut -d= -f2- || true)"
           if grep -q '^RAG_IMAGE=' .env.vps; then
