@@ -26,7 +26,9 @@ jobs:
           fetch-depth: 0
 
       - name: Detect committed secrets
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Scan source and locks
         uses: aquasecurity/trivy-action@v0.36.0
@@ -374,5 +376,10 @@ jobs:
             fi
             exit 1
           fi
-          printf '%s rag %s %s\n' "$(date -u +%FT%TZ)" '${{ needs.publish.outputs.sha }}' "$RAG_IMAGE" >> .deploy-history
+          DEPLOY_HISTORY_FILE="${DEPLOY_HISTORY_FILE:-/var/lib/weavecarbon/deploy-history.log}"
+          install -d -m 0750 "$(dirname "$DEPLOY_HISTORY_FILE")"
+          (
+            flock -x 9
+            printf '%s rag %s %s\n' "$(date -u +%FT%TZ)" '${{ needs.publish.outputs.sha }}' "$RAG_IMAGE" >&9
+          ) 9>>"$DEPLOY_HISTORY_FILE"
           EOF

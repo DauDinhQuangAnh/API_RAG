@@ -7,6 +7,7 @@ from API_RAG_NEW.operations import (
     normalize_correlation_id,
     render_metrics,
     reset_metrics_for_tests,
+    should_log_request,
 )
 
 
@@ -42,3 +43,10 @@ def test_embedding_cache_is_versioned_and_reports_hit_miss() -> None:
     output = render_metrics()
     assert 'result="miss"' in output
     assert 'result="hit"' in output
+
+
+def test_health_probes_are_excluded_from_access_log_noise() -> None:
+    assert not should_log_request("/health")
+    assert not should_log_request("/ready")
+    assert not should_log_request("/metrics")
+    assert should_log_request("/query")

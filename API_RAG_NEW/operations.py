@@ -17,6 +17,7 @@ _correlation_id: ContextVar[str | None] = ContextVar("correlation_id", default=N
 _safe_id = re.compile(r"^[a-zA-Z0-9._:-]{1,128}$")
 _uuid_path = re.compile(r"/[0-9a-f]{8}-[0-9a-f-]{27,}", re.IGNORECASE)
 _number_path = re.compile(r"/\d+(?=/|$)")
+_QUIET_PATHS = frozenset({"/health", "/ready", "/metrics"})
 _counters: Counter[tuple[str, tuple[tuple[str, str], ...]]] = Counter()
 _lock = threading.Lock()
 
@@ -24,6 +25,10 @@ _lock = threading.Lock()
 def normalize_correlation_id(value: str | None) -> str:
     candidate = str(value or "").strip()
     return candidate if _safe_id.fullmatch(candidate) else str(uuid.uuid4())
+
+
+def should_log_request(path: str) -> bool:
+    return path not in _QUIET_PATHS
 
 
 def get_correlation_id() -> str | None:
@@ -122,13 +127,14 @@ async def operational_middleware(request: Request, call_next):
             method=request.method,
             path=safe_path,
         )
-        logger.info(
-            "request_completed method=%s path=%s status=%s duration_ms=%.1f",
-            request.method,
-            safe_path,
-            status_code,
-            duration_ms,
-        )
+        if should_log_request(safe_path):
+            logger.info(
+                "request_completed method=%s path=%s status=%s duration_ms=%.1f",
+                request.method,
+                safe_path,
+                status_code,
+                duration_ms,
+            )
         if response_status is not None:
             response_status.headers["X-Correlation-ID"] = correlation_id
         _correlation_id.reset(token)
