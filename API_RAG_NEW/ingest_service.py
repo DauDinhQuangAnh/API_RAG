@@ -66,10 +66,10 @@ def ingest_file_content(
     runtime = _runtime_for_provider(provider)
     effective_chunking_profile = resolve_chunking_profile(chunking_profile)
     extension = os.path.splitext(file_name)[1].casefold()
-    if extension not in {".docx", ".pdf", ".txt", ".text", ".xlsx"}:
+    if extension not in {".docx", ".pdf", ".txt", ".text", ".xlsx", ".md"}:
         raise HTTPException(
             status_code=400,
-            detail="Only DOCX, PDF, TXT, TEXT, and XLSX files are supported.",
+            detail="Only DOCX, PDF, TXT, TEXT, XLSX, and MD files are supported.",
         )
 
     final_collection_name = _resolve_collection_name(file_name, requested_collection_name)
@@ -390,7 +390,7 @@ def _extract_non_pdf_document_text(
             return _extract_docx_text(raw_content)
         if extension == ".xlsx":
             return _extract_xlsx_text(raw_content)
-        if extension in {".txt", ".text"}:
+        if extension in {".txt", ".text", ".md"}:
             return _decode_text_file(raw_content)
     except HTTPException:
         raise
