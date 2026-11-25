@@ -26,10 +26,13 @@ def _load_saved_model_name() -> Optional[str]:
 
 def _save_model_name(model_name: str) -> None:
     payload = {"model_name": model_name}
-    MODEL_STATE_FILE.write_text(
-        json.dumps(payload, indent=2, ensure_ascii=True),
-        encoding="utf-8",
-    )
+    try:
+        MODEL_STATE_FILE.write_text(
+            json.dumps(payload, indent=2, ensure_ascii=True),
+            encoding="utf-8",
+        )
+    except OSError:
+        pass
 
 
 def _sentence_transformer_class() -> Any:

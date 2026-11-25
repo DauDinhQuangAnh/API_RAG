@@ -70,6 +70,7 @@ class OnlineLLMs(LLM):
             print(f"Error occurred: {e}, retrying...")
             raise e   
 
+    @backoff.on_exception(backoff.expo, Exception, max_tries=3)
     def generate_content(self, prompt):
         if not self.client:
             raise ValueError(
